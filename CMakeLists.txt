@@ -1,14 +1,26 @@
 cmake_minimum_required(VERSION 3.5)
 project(vfs)
 
+option(VFS_ASAN "Enable AddressSanitizer" OFF)
+
 ###############################################################################
 # Functions
 ###############################################################################
-function(setup_target_wall name)
+function(vfs_setup_target_wall name)
     if (CMAKE_C_COMPILER_ID STREQUAL "MSVC")
         target_compile_options(${name} PRIVATE /W4 /WX)
     else ()
         target_compile_options(${name} PRIVATE -Wall -Wextra -Werror)
+    endif ()
+endfunction()
+
+function(vfs_setup_asan name)
+    if (CMAKE_C_COMPILER_ID STREQUAL "MSVC")
+        target_compile_options(${name} PUBLIC /fsanitize=address)
+        target_link_options(${name} PUBLIC /fsanitize=address)
+    else ()
+        target_compile_options(${name} PUBLIC -fsanitize=address)
+        target_link_options(${name} PUBLIC -fsanitize=address)
     endif ()
 endfunction()
 
@@ -37,7 +49,11 @@ target_include_directories(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-setup_target_wall(${PROJECT_NAME})
+vfs_setup_target_wall(${PROJECT_NAME})
+
+if (VFS_ASAN)
+    vfs_setup_asan(${PROJECT_NAME})
+endif ()
 
 ###############################################################################
 # Test
@@ -46,5 +62,6 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     include(CTest)
 endif()
 if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND BUILD_TESTING)
-    add_subdirectory(test)
+    add_subdirectory(third_party/cutest)
+	add_subdirectory(test)
 endif()
