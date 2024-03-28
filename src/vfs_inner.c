@@ -9,28 +9,31 @@
  * @param[in] path - Path to the filesystem. Encoding in UTF-8.
  * @return vfs_mount_t* on success, or NULL on error.
 */
-static vfs_mount_t* _vfs_fetch_path_and_add_node(const char* path)
+static vfs_mount_t* _vfs_fetch_path_and_add_node(const vfs_str_t* path)
 {
     vfs_mount_t tmp_node;
-    tmp_node.path = (char*)path;
+    tmp_node.path = *path;
 
     vfs_mount_t* node = NULL;
     vfs_rwlock_rdlock(&g_vfs->mount_map_lock);
     do {
         ev_map_node_t* it = vfs_map_find_upper(&g_vfs->mount_map, &tmp_node.node);
-        if (it == NULL)
+        if (it != NULL)
+        {
+            it = vfs_map_prev(it);
+        }
+        else
         {
             it = vfs_map_end(&g_vfs->mount_map);
         }
 
-        it = vfs_map_prev(it);
         if (it == NULL)
         {
             break;
         }
 
         node = EV_CONTAINER_OF(it, vfs_mount_t, node);
-        if (strncmp(path, node->path, node->path_sz) == 0)
+        if (vfs_str_startwith2(path, &node->path))
         {
             (void)vfs_atomic_add(&node->refcnt);
             break;
@@ -43,12 +46,17 @@ static vfs_mount_t* _vfs_fetch_path_and_add_node(const char* path)
     return node;
 }
 
-static const char* _vfs_get_relative_path(const vfs_mount_t* node, const char* path)
+static vfs_str_t _vfs_get_relative_path(const vfs_mount_t* node, const vfs_str_t* path)
 {
-    return path + node->path_sz;
+    if (node->path.len == path->len)
+    {
+        return vfs_str_from_static1("/");
+    }
+
+    return vfs_str_sub(path, node->path.len, (size_t)-1);
 }
 
-int vfs_op_safe(const char* path, vfs_path_cb cb, void* data)
+int vfs_access_mount(const vfs_str_t* path, vfs_path_cb cb, void* data)
 {
     vfs_mount_t* node = _vfs_fetch_path_and_add_node(path);
     if (node == NULL)
@@ -63,26 +71,28 @@ int vfs_op_safe(const char* path, vfs_path_cb cb, void* data)
         goto finish;
     }
 
-    const char* relative_path = _vfs_get_relative_path(node, path);
-    ret = cb(node, relative_path, data);
+    vfs_str_t relative_path = _vfs_get_relative_path(node, path);
+    ret = cb(node, &relative_path, data);
+    vfs_str_exit(&relative_path);
 
 finish:
-    vfs_dec_node(node);
+    vfs_release_mount(node);
     return ret;
 }
 
-void vfs_dec_node(vfs_mount_t* node)
+void vfs_release_mount(vfs_mount_t* point)
 {
-    if (vfs_atomic_dec(&node->refcnt) != 0)
+    if (vfs_atomic_dec(&point->refcnt) != 0)
     {
         return;
     }
 
-    if (node->op != NULL)
+    if (point->op != NULL)
     {
-        node->op->destroy(node->op);
-        node->op = NULL;
+        point->op->destroy(point->op);
+        point->op = NULL;
     }
 
-    free(node);
+    vfs_str_exit(&point->path);
+    free(point);
 }

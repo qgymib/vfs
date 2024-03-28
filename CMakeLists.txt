@@ -28,12 +28,15 @@ endfunction()
 # Setup library
 ###############################################################################
 add_library(${PROJECT_NAME}
+    src/fs/localfs.c
     src/utils/atomic.c
+    src/utils/errcode.c
     src/utils/list.c
     src/utils/map.c
     src/utils/mutex.c
     src/utils/rwlock.c
     src/utils/sem.c
+    src/utils/str.c
     src/utils/thread.c
     src/utils/threadpool.c
     src/vfs.c

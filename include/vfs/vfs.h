@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include "inner/errno.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -13,8 +14,9 @@ typedef enum vfs_open_flag
     VFS_O_RDONLY    = 0x0001,                       /**< Read only. */
     VFS_O_WRONLY    = 0x0002,                       /**< Write only. */
     VFS_O_RDWR      = VFS_O_RDONLY | VFS_O_WRONLY,  /**< Read and write. */
-    VFS_O_APPEND    = 0x0004,                       /**< Append to file. */
-    VFS_O_TRUNCATE  = 0x0008,                       /**< Truncate file to zero. */
+
+    VFS_O_APPEND    = 0x0004,                       /**< Append to file. It is conflict with #VFS_O_TRUNCATE. */
+    VFS_O_TRUNCATE  = 0x0008,                       /**< Truncate file to zero. It is conflict with #VFS_O_APPEND. */
     VFS_O_CREATE    = 0x0010,                       /**< Create file if not exist. */
 } vfs_open_flag_t;
 
@@ -23,6 +25,13 @@ typedef enum vfs_stat_flag
     VFS_S_IFDIR     = 0x4000,                       /**< Directory. */
     VFS_S_IFREG     = 0x8000,                       /**< Regular file. */
 } vfs_stat_flag_t;
+
+typedef enum vfs_seek_flag
+{
+    VFS_SEEK_SET    = 0,    /**< Start of file. */
+    VFS_SEEK_CUR    = 1,    /**< Current position. */
+    VFS_SEEK_END    = 2,    /**< End of file. */
+} vfs_seek_flag_t;
 
 typedef struct vfs_stat
 {
@@ -63,6 +72,16 @@ typedef struct vfs_operations
     int (*ls)(struct vfs_operations* thiz, const char* path, vfs_ls_cb fn, void* data);
 
     /**
+     * @brief (Optional) Get file stat.
+     * @param[in] thiz - This object.
+     * @param[in] path - Path to file. Encoding in UTF-8.
+     * @param[out] info - File stat.
+     * @return - 0: on success.
+     * @return - -errno: on error.
+    */
+    int (*stat)(struct vfs_operations* thiz, const char* path, vfs_stat_t* info);
+
+    /**
      * @brief (Optional) Open file in binary mode.
      * @param[in] thiz - This object.
      * @param[out] fh - File handle.
@@ -81,12 +100,32 @@ typedef struct vfs_operations
     int (*close)(struct vfs_operations* thiz, uintptr_t fh);
 
     /**
+     * @brief (Optional) Set the file position indicator for the stream pointed
+     *   to by \p fh.
+     * @param[in] thiz - This object.
+     * @param[in] fh - File handle.
+     * @param[in] offset - The new position measured in bytes.
+     * @param[in] whence - Whence. Must one of #vfs_seek_flag_t.
+     * @return - >=0: Resulting offset location as measured in  bytes from the
+     *   beginning of the file.
+     * @return - -errno: error.
+    */
+    int64_t (*seek)(struct vfs_operations* thiz, uintptr_t fh, int64_t offset, int whence);
+
+    /**
      * @brief (Optional) Read data from file.
+     *
+     * The return value indicates the number of bytes that were actually read.
+     * Value of 0 does not indicate end of file. To test for end of file, check
+     * the return value against #VFS_EOF.
+     *
      * @param[in] thiz - This object.
      * @param[in] fh - File handle.
      * @param[out] buf - Buffer to store data.
      * @param[in] size - Buffer size.
-     * @return Number of bytes read on success, or -errno on error.
+     * @return - >=0: Number of bytes read on success.
+     * @return - #VFS_EOF: end of file.
+     * @return - -errno: error.
      */
     int (*read)(struct vfs_operations* thiz, uintptr_t fh, void* buf, size_t len);
 
@@ -96,9 +135,27 @@ typedef struct vfs_operations
      * @param[in] fh - File handle.
      * @param[in] buf - Buffer containing data.
      * @param[in] size - Size of data.
-     * @return Number of bytes written on success, or -errno on error.
+     * @return - >=0: Number of bytes written on success.
+     * @return - -errno: error.
      */
     int (*write)(struct vfs_operations* thiz, uintptr_t fh, const void* buf, size_t len);
+
+    /**
+     * @brief Remove a file or directory.
+     *
+     * The \p flags indicate the item type of the \p path:
+     * - #VFS_S_IFDIR: The \p path is a directory.
+     * - #VFS_S_IFREG: The \p path is a regular file.
+     *
+     * @param[in] thiz - This object.
+     * @param[in] path - Path to the item. Encoding in UTF-8.
+     * @param[in] flags - Item type. Must be one of #vfs_stat_flag_t.
+     * @return - 0: On success.
+     * @return - #VFS_EISDIR: If \p flags is #VFS_S_IFREG but \p path is a directory.
+     * @return - #VFS_ENOTDIR: If \p flags is #VFS_S_IFDIR but \p path is a regular file.
+     * @return - #VFS_ENOTEMPTY: If \p path is a non-empty directory.
+     */
+    int (*rm)(struct vfs_operations* thiz, const char* path, int flags);
 } vfs_operations_t;
 
 /**
@@ -109,13 +166,23 @@ int vfs_init(void);
 
 /**
  * @brief Exit the virtual file system.
+ * @warning There must be no other function calls before doing this.
  */
 void vfs_exit(void);
 
 /**
  * @brief Mount a file system instance \p op into \p path.
- * @param[in] path - The path to mount. The path must be absolute, and does not
- *   contains duplicate slashes.
+ *
+ * The \p path can be following styles:
+ * 1. File style. like `/`, `/foo` or `/foo/bar/`.
+ * 2. URL style. like `file:///`, `http://domain.com` or `ftp://username:password@domain.com/foo/`.
+ *
+ * This function does not check the \p path, so the following rules must obey:
+ * 1. Always use slash '/', do not use backslash '\\'.
+ * 2. Do not use continues slash unless it is part of URL scheme, e.g. `file:///`.
+ * 3. File style path must start with '/'.
+ *
+ * @param[in] path - The path to mount.
  * @param[in] op - File system object.
  * @return 0 on success, or -errno on error.
  */
@@ -129,7 +196,8 @@ int vfs_mount(const char* path, vfs_operations_t* op);
 int vfs_unmount(const char* path);
 
 /**
- * @brief Get visitor file system object.
+ * @brief Get global VFS visitor object.
+ * @warning Do not destroy the returned object.
  * @return File system object.
  */
 vfs_operations_t* vfs_visitor(void);

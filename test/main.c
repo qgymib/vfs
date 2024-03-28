@@ -10,7 +10,7 @@
 #include <crtdbg.h>
 #endif
 
-#include "cutest.h"
+#include "test.h"
 
 int main(int argc, char* argv[])
 {
@@ -18,5 +18,9 @@ int main(int argc, char* argv[])
     _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 #endif
 
-    return cutest_run_tests(argc, argv, stdout, NULL);
+    static cutest_hook_t hook;
+    hook.before_all_test = vfs_test_init;
+    hook.after_all_test = vfs_test_exit;
+
+    return cutest_run_tests(argc, argv, stdout, &hook);
 }

@@ -13,22 +13,28 @@ static int _vfs_map_cmp_mount(const ev_map_node_t* key1, const ev_map_node_t* ke
     (void)arg;
     vfs_mount_t* node1 = EV_CONTAINER_OF(key1, vfs_mount_t, node);
     vfs_mount_t* node2 = EV_CONTAINER_OF(key2, vfs_mount_t, node);
-    return strcmp(node1->path, node2->path);
+    return strcmp(node1->path.str, node2->path.str);
 }
 
-static void _vfs_setup_node(vfs_mount_t* node, const char* path, size_t path_sz, vfs_operations_t* op)
+static void _vfs_setup_node(vfs_mount_t* node, const char* path, vfs_operations_t* op)
 {
     node->refcnt = 1;
-    node->path = (char*)(node + 1);
-    memcpy(node->path, path, path_sz + 1);
-    node->path_sz = path_sz;
+    node->path = vfs_str_from1(path);
     node->op = op;
 
-    /* Remove trailing '/' */
-    if (node->path[node->path_sz] == '/')
+    /*
+     * Format path to remove trailing '/'.
+     * VFS convert following patterns:
+     * 1. "/" --> "/"
+     * 2. "/foo" --> "/foo"
+     * 3. "/foo/" --> "/foo"
+     * 4. "file:///" --> "file:///"
+     * 5. "file:///foo" --> "file:///foo"
+     * 6. "file:///foo/" --> "file:///foo"
+     */
+    if (node->path.len >= 2 && node->path.str[node->path.len - 1] == '/' && node->path.str[node->path.len - 2] != '/')
     {
-        node->path[node->path_sz] = '\0';
-        node->path_sz--;
+        vfs_str_chop(&node->path, 1);
     }
 }
 
@@ -44,7 +50,7 @@ static void _vfs_cleanup_mount(void)
 
         vfs_rwlock_wrunlock(&g_vfs->mount_map_lock);
         {
-            vfs_dec_node(node);
+            vfs_release_mount(node);
         }
         vfs_rwlock_wrlock(&g_vfs->mount_map_lock);
     }
@@ -92,15 +98,12 @@ void vfs_exit(void)
 
 int vfs_mount(const char* path, vfs_operations_t* op)
 {
-    size_t path_sz = strlen(path);
-    size_t malloc_sz = sizeof(vfs_mount_t) + path_sz + 1;
-
-    vfs_mount_t* node = calloc(1, malloc_sz);
+    vfs_mount_t* node = malloc(sizeof(vfs_mount_t));
     if (node == NULL)
     {
         return -ENOMEM;
     }
-    _vfs_setup_node(node, path, path_sz, op);
+    _vfs_setup_node(node, path, op);
 
     ev_map_node_t* orig;
     vfs_rwlock_wrlock(&g_vfs->mount_map_lock);
@@ -121,7 +124,7 @@ int vfs_mount(const char* path, vfs_operations_t* op)
 int vfs_unmount(const char* path)
 {
     vfs_mount_t tmp_node;
-    tmp_node.path = (char*)path;
+    tmp_node.path = vfs_str_from_static1(path);
 
     vfs_mount_t* node = NULL;
     vfs_rwlock_wrlock(&g_vfs->mount_map_lock);
@@ -135,12 +138,13 @@ int vfs_unmount(const char* path)
     }
     vfs_rwlock_wrunlock(&g_vfs->mount_map_lock);
 
+    vfs_str_exit(&tmp_node.path);
     if (node == NULL)
     {
         return -ENOENT;
     }
 
-    vfs_dec_node(node);
+    vfs_release_mount(node);
 
     return 0;
 }

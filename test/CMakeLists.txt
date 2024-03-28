@@ -1,7 +1,15 @@
 
 add_executable(vfs_test
-    case/init_and_exit.c
+    case/localfs_ls.cpp
+    case/localfs_read.cpp
+    case/localfs_rm.cpp
+    case/localfs_seek.cpp
+    case/localfs_stat.cpp
+    utils/cwdpath.c
+    utils/exepath.c
+    utils/file.c
     main.c
+    test.c
 )
 
 if (VFS_ASAN)

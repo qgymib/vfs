@@ -1,10 +1,11 @@
 #ifndef __VFS_INNER_H__
 #define __VFS_INNER_H__
 
-#include "vfs.h"
+#include "vfs/vfs.h"
 #include "utils/atomic.h"
 #include "utils/map.h"
 #include "utils/rwlock.h"
+#include "utils/str.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -18,8 +19,7 @@ typedef struct vfs_mount_s
     ev_map_node_t       node;           /**< Node in map. See #vfs_ctx_t::mount_map. */
 
     vfs_atomic_t        refcnt;         /**< Reference count. */
-    char*               path;           /**< Mount path. */
-    size_t              path_sz;        /**< Mount path size. */
+    vfs_str_t           path;           /**< Mount path. */
 
     vfs_operations_t*   op;             /**< Filesystem operations. */
 } vfs_mount_t;
@@ -40,7 +40,7 @@ extern vfs_ctx_t*       g_vfs;
  * @param[in] data - User defined data.
  * @return Any value that return to caller.
  */
-typedef int (*vfs_path_cb)(vfs_mount_t* fs, const char* path, void* data);
+typedef int (*vfs_path_cb)(vfs_mount_t* fs, const vfs_str_t* path, void* data);
 
 /**
  * @brief Perform safe operation on \p path.
@@ -49,16 +49,16 @@ typedef int (*vfs_path_cb)(vfs_mount_t* fs, const char* path, void* data);
  * @param[in] data - User defined data.
  * @return 0 if success, or -errno if failure.
  */
-int vfs_op_safe(const char* path, vfs_path_cb cb, void* data);
+int vfs_access_mount(const vfs_str_t* path, vfs_path_cb cb, void* data);
 
 /**
  * @brief Decrement reference count of \p node.
  * 
  * To add reference count, use #vfs_atomic_add() directly on #vfs_mount_t::refcnt.
  *
- * @param[in] node - File system node.
+ * @param[in] point - File system node.
  */
-void vfs_dec_node(vfs_mount_t* node);
+void vfs_release_mount(vfs_mount_t* point);
 
 #ifdef __cplusplus
 }
