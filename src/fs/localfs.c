@@ -391,7 +391,7 @@ static int _vfs_local_ls_common(const vfs_str_t* path, vfs_ls_cb fn, void* data)
     return ret;
 }
 
-static int _vfs_linux_flags_to_native(uint64_t flags)
+static int _vfs_localfs_flags_to_linux_flags(uint64_t flags)
 {
     int ret = 0;
     if ((flags & VFS_O_RDWR) == VFS_O_RDWR)
@@ -423,10 +423,21 @@ static int _vfs_linux_flags_to_native(uint64_t flags)
     return ret;
 }
 
+static mode_t _vfs_localfs_flags_to_linux_mode(uint64_t flags)
+{
+    if (!(flags & VFS_O_CREATE))
+    {
+        return 0;
+    }
+
+    return S_IRWXU;
+}
+
 static int _vfs_localfs_open_common(uintptr_t* fh, const vfs_str_t* path, uint64_t flags)
 {
-    const int native_flag = _vfs_linux_flags_to_native(flags);
-    int fd = open(path->str, native_flag);
+    const int native_flag = _vfs_localfs_flags_to_linux_flags(flags);
+    const mode_t native_mode = _vfs_localfs_flags_to_linux_mode(flags);
+    int fd = open(path->str, native_flag, native_mode);
     if (fd < 0)
     {
         return vfs_translate_sys_err(errno);
