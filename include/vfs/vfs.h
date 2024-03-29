@@ -156,6 +156,15 @@ typedef struct vfs_operations
      * @return - #VFS_ENOTEMPTY: If \p path is a non-empty directory.
      */
     int (*rm)(struct vfs_operations* thiz, const char* path, int flags);
+
+    /**
+     * @brief Create a directory.
+     * @param[in] thiz - This object.
+     * @param[in] path - Path to the directory. Encoding in UTF-8.
+     * @return - 0: On success.
+     * @return - -errno: On error.
+     */
+    int (*mkdir)(struct vfs_operations* thiz, const char* path);
 } vfs_operations_t;
 
 /**

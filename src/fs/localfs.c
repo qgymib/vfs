@@ -314,6 +314,16 @@ static int64_t _vfs_localfs_seek(struct vfs_operations* thiz, uintptr_t fh, int6
     return win_offset.QuadPart;
 }
 
+static int _vfs_localfs_mkdir_common(const vfs_str_t* path)
+{
+    if (_mkdir(path->str) < 0)
+    {
+        int errcode = errno;
+        return vfs_translate_sys_err(errcode);
+    }
+    return 0;
+}
+
 #else
 
 #include <sys/types.h>
@@ -514,6 +524,16 @@ static int64_t _vfs_localfs_seek(struct vfs_operations* thiz, uintptr_t fh, int6
     return ret;
 }
 
+static int _vfs_localfs_mkdir_common(const vfs_str_t* path)
+{
+    if (mkdir(path->str, 0) < 0)
+    {
+        int errcode = errno;
+        return vfs_translate_sys_err(errcode);
+    }
+    return 0;
+}
+
 #endif
 
 static void _vfs_local_destroy(struct vfs_operations* thiz)
@@ -645,6 +665,20 @@ static int _vfs_localfs_stat(struct vfs_operations* thiz, const char* path, vfs_
     return ret;
 }
 
+static int _vfs_localfs_mkdir(struct vfs_operations* thiz, const char* path)
+{
+    int ret;
+    vfs_localfs_t* fs = EV_CONTAINER_OF(thiz, vfs_localfs_t, op);
+
+    vfs_str_t actual_path = _vfs_local_get_access_path(&fs->root, path);
+    {
+        ret = _vfs_localfs_mkdir_common(&actual_path);
+    }
+    vfs_str_exit(&actual_path);
+
+    return ret;
+}
+
 int vfs_make_local(vfs_operations_t** fs, const char* root)
 {
     vfs_localfs_t* newfs = calloc(1, sizeof(vfs_localfs_t));
@@ -663,6 +697,7 @@ int vfs_make_local(vfs_operations_t** fs, const char* root)
     newfs->op.read = _vfs_localfs_read;
     newfs->op.write = _vfs_localfs_write;
     newfs->op.rm = _vfs_localfs_rm;
+    newfs->op.mkdir = _vfs_localfs_mkdir;
 
     *fs = &newfs->op;
     return 0;
