@@ -34,9 +34,11 @@ add_library(${PROJECT_NAME}
     src/utils/list.c
     src/utils/map.c
     src/utils/mutex.c
+    src/utils/path.c
     src/utils/rwlock.c
     src/utils/sem.c
     src/utils/str.c
+    src/utils/strlist.c
     src/utils/thread.c
     src/utils/threadpool.c
     src/vfs.c

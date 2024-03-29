@@ -24,6 +24,24 @@
 #endif
 
 /**
+ * @brief I/O error.
+ */
+#if defined(EIO)
+#   define VFS_EIO			VFS__ERR(EIO)
+#else
+#   define VFS_EIO			(-5)
+#endif
+
+/**
+ * @brief Out of memory.
+ */
+#if defined(ENOMEM)
+#   define VFS_ENOMEM       VFS__ERR(ENOMEM)
+#else
+#   define VFS_ENOMEM       (-12)
+#endif
+
+/**
  * @brief Permission denied.
  */
 #if defined(EACCES)
@@ -69,9 +87,9 @@
 #endif
 
 #if defined(ENOSYS)
-#   define VFS_ENOSYS		VFS__ERR(ENOSYS)
+#   define VFS_ENOSYS       VFS__ERR(ENOSYS)
 #else
-#   define VFS_ENOSYS		(-40)
+#   define VFS_ENOSYS       (-40)
 #endif
 
 /**

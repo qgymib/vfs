@@ -42,7 +42,7 @@ TEST_F(localfs, seek)
     {
         const char* pattern = LOCALFS_TEST_MAGIC;
         const size_t pattern_sz = strlen(pattern);
-        offset = vfs_str_search(&exe_data, pattern, pattern_sz);
+        offset = vfs_str_search2(&exe_data, pattern, pattern_sz);
         ASSERT_GE_SIZE(offset, 0);
     }
 

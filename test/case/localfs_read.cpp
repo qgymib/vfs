@@ -42,7 +42,7 @@ TEST_F(localfs, read)
     {
         const char* pattern = LOCALFS_TEST_MAGIC;
         const size_t pattern_sz = strlen(pattern);
-        ASSERT_GE_PTRDIFF(vfs_str_search(&exe_data, pattern, pattern_sz), 0);
+        ASSERT_GE_PTRDIFF(vfs_str_search2(&exe_data, pattern, pattern_sz), 0);
     }
 
     vfs_str_exit(&mount_path);

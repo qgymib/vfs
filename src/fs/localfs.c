@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include "vfs/fs/localfs.h"
 #include "utils/defs.h"
-#include "utils/str.h"
+#include "utils/path.h"
 #include "utils/errcode.h"
 
 typedef struct vfs_localfs
@@ -112,7 +112,7 @@ static int _vfs_local_ls_common(const vfs_str_t* path, vfs_ls_cb fn, void* data)
     HANDLE hFind = INVALID_HANDLE_VALUE;
     vfs_str_t copy_path = vfs_str_dup(path);
     vfs_str_append1(&copy_path, "/*");
-    vfs_str_to_nativate_path(&copy_path);
+    vfs_path_to_native(&copy_path);
 
     do
     {

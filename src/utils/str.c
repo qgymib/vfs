@@ -1,6 +1,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
+#include "vfs/vfs.h"
 #include "defs.h"
 #include "str.h"
 
@@ -403,9 +404,16 @@ int vfs_str_endwith1(const vfs_str_t* str, const char* data)
     return vfs_str_endwith(str, data, size);
 }
 
-ptrdiff_t vfs_str_search(const vfs_str_t* str, const char* data, size_t size)
+ptrdiff_t vfs_str_search(const vfs_str_t* str, size_t start, size_t len,
+    const char* data, size_t size)
 {
-    const uint8_t* addr = _boyer_moore((uint8_t*)str->str, str->len, (uint8_t*)data, size);
+    if (start + len > str->len || len == 0)
+    {
+        return VFS_EINVAL;
+    }
+    const uint8_t* start_pos = (uint8_t*)str->str + start;
+
+    const uint8_t* addr = _boyer_moore(start_pos, len, (uint8_t*)data, size);
     if (addr == NULL)
     {
         return -1;
@@ -413,6 +421,63 @@ ptrdiff_t vfs_str_search(const vfs_str_t* str, const char* data, size_t size)
 
     ptrdiff_t offset = addr - (uint8_t*)str->str;
     return offset;
+}
+
+ptrdiff_t vfs_str_search1(const vfs_str_t* str, size_t start,
+    const char* data, size_t size)
+{
+    if (start > str->len)
+    {
+        return VFS_EINVAL;
+    }
+
+    size_t len = str->len - start;
+    return vfs_str_search(str, start, len, data, size);
+}
+
+ptrdiff_t vfs_str_search2(const vfs_str_t* str, const char* data, size_t size)
+{
+    return vfs_str_search1(str, 0, data, size);
+}
+
+ptrdiff_t vfs_str_search3(const vfs_str_t* str, const char* data)
+{
+    size_t size = strlen(data);
+    return vfs_str_search2(str, data, size);
+}
+
+ptrdiff_t vfs_str_search4(const vfs_str_t* str, size_t start, const char* data)
+{
+    size_t size = strlen(data);
+    return vfs_str_search1(str, start, data, size);
+}
+
+int vfs_str_cmp(const vfs_str_t* str, const char* data, size_t size)
+{
+    int ret;
+    size_t cmp_size = min(str->len, size);
+
+    if ((ret = memcmp(str->str, data, cmp_size)) != 0)
+    {
+        return ret;
+    }
+
+    if (str->len == size)
+    {
+        return 0;
+    }
+    return str->len < size ? -1 : 1;
+}
+
+int vfs_str_cmp1(const vfs_str_t* str, const char* data)
+{
+    size_t size = strlen(data);
+    return vfs_str_cmp(str, data, size);
+}
+
+int vfs_str_cmp2(const vfs_str_t* s1, const vfs_str_t* s2)
+{
+    return vfs_str_cmp(s1, s2->str, s2->len);
 }
 
 void vfs_str_remove_trailing(vfs_str_t* str, char c)
@@ -428,24 +493,5 @@ void vfs_str_remove_trailing(vfs_str_t* str, char c)
     {
         str->len--;
         str->str[str->len] = '\0';
-    }
-}
-
-void vfs_str_to_nativate_path(vfs_str_t* str)
-{
-#if defined(_WIN32)
-    const char nativate_slash = '\\';
-    const char non_nativate_slash = '/';
-#else
-    const char nativate_slash = '/';
-    const char non_nativate_slash = '\\';
-#endif
-    size_t i;
-    for (i = 0; i < str->len; i++)
-    {
-        if (str->str[i] == non_nativate_slash)
-        {
-            str->str[i] = nativate_slash;
-        }
     }
 }

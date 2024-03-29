@@ -19,14 +19,23 @@ typedef struct vfs_str
  * @brief Static initializer for #vfs_str_t.
  * Any instance of #vfs_str_t must always initialized to it.
  */
-#define VFS_STR_INIT    { NULL, 0, 0 }
+#define VFS_STR_INIT            { NULL, 0, 0 }
 
 /**
  * @brief Check if \p s is a static string.
  * @param[in] s - String to check.
  * @return true if \p s  is a static string.
  */
-#define VFS_STR_IS_STATIC(s) ((s)->cap == 0)
+#define VFS_STR_IS_STATIC(s)    ((s)->cap == 0)
+
+/**
+ * @brief Check if \p s is empty.
+ * @warning Even \p s is empty, it is still need to call #vfs_str_exit() to
+ *   free it.
+ * @param[in] s - String to check.
+ * @return true if \p s is empty.
+ */
+#define VFS_STR_IS_EMPTY(s)     ((s)->len == 0)
 
 /**
  * @brief Create a new string object with \p data and \p size.
@@ -202,12 +211,81 @@ int vfs_str_endwith1(const vfs_str_t* str, const char* data);
 /**
  * @brief Search for \p data in the string.
  * @param[in] str - String object.
+ * @param[in] start - Start index.
+ * @param[in] len - Max length in bytes to search.
  * @param[in] data - Data to search for.
  * @param[in] size - Data size in bytes.
  * @return Index of the first occurrence of \p data in the string, or -1 if not
  *   found.
  */
-ptrdiff_t vfs_str_search(const vfs_str_t* str, const char* data, size_t size);
+ptrdiff_t vfs_str_search(const vfs_str_t* str, size_t start, size_t len,
+    const char* data, size_t size);
+
+/**
+ * @brief Search for \p data in the string.
+ * @param[in] str - String object.
+ * @param[in] start - Start index.
+ * @param[in] data - Data to search for.
+ * @param[in] size - Data size in bytes.
+ * @return Index of the first occurrence of \p data in the string, or -1 if not
+ *   found.
+ */
+ptrdiff_t vfs_str_search1(const vfs_str_t* str, size_t start,
+	const char* data, size_t size);
+
+/**
+ * @brief Search for \p data in the string.
+ * @param[in] str - String object.
+ * @param[in] data - Data to search for.
+ * @param[in] size - Data size in bytes.
+ * @return Index of the first occurrence of \p data in the string, or -1 if not
+ *   found.
+ */
+ptrdiff_t vfs_str_search2(const vfs_str_t* str, const char* data, size_t size);
+
+/**
+ * @brief Search for \p data in the string.
+ * @param[in] str - String object.
+ * @param[in] data - Data to search for.
+ * @return Index of the first occurrence of \p data in the string, or -1 if not
+ *   found.
+ */
+ptrdiff_t vfs_str_search3(const vfs_str_t* str, const char* data);
+
+/**
+ * @brief Search for \p data in the string.
+ * @param[in] str - String object.
+ * @param[in] start - Start index.
+ * @param[in] data - Data to search for.
+ * @return Index of the first occurrence of \p data in the string, or -1 if not
+ *   found.
+ */
+ptrdiff_t vfs_str_search4(const vfs_str_t* str, size_t start, const char* data);
+
+/**
+ * @brief Compare \p str and \p data with \p size bytes.
+ * @param[in] str - String object.
+ * @param[in] data - Data to compare.
+ * @param[in] size - Data size in bytes.
+ * @return 0 if \p str and \p data are equal.
+ */
+int vfs_str_cmp(const vfs_str_t* str, const char* data, size_t size);
+
+/**
+ * @brief Compare \p str and \p data with \p size bytes.
+ * @param[in] str - String object.
+ * @param[in] data - Data to compare.
+ * @return 0 if \p str and \p data are equal.
+ */
+int vfs_str_cmp1(const vfs_str_t* str, const char* data);
+
+/**
+ * @brief Compare \p s1 and \p s2.
+ * @param[in] s1 - String object.
+ * @param[in] s2 - String object.
+ * @return 0 if \p s1 and \p s2 are equal.
+ */
+int vfs_str_cmp2(const vfs_str_t* s1, const vfs_str_t* s2);
 
 /**
  * @brief Remove trailing \p c from the string.
@@ -215,12 +293,6 @@ ptrdiff_t vfs_str_search(const vfs_str_t* str, const char* data, size_t size);
  * @param[in] c - Character to remove.
  */
 void vfs_str_remove_trailing(vfs_str_t* str, char c);
-
-/**
- * @brief Convert \p str to native path.
- * @param[in,out] str - String object.
- */
-void vfs_str_to_nativate_path(vfs_str_t* str);
 
 #ifdef __cplusplus
 }
