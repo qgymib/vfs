@@ -23,6 +23,15 @@
 #endif
 
 /**
+ * @brief Get the size of an array.
+ * @param[in] arr - Array.
+ * @return The size of the array.
+ */
+#ifndef ARRAY_SIZE
+#   define ARRAY_SIZE(arr)  (sizeof(arr) / sizeof(arr[0]))
+#endif
+
+/**
  * @brief Get the minimum of two values.
  * @param[in] a - First value.
  * @param[in] b - Second value.

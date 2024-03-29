@@ -2,6 +2,7 @@
 add_executable(vfs_test
     case/localfs_ls.cpp
     case/localfs_mkdir.cpp
+    case/localfs_mount.cpp
     case/localfs_read.cpp
     case/localfs_seek.cpp
     case/localfs_stat.cpp

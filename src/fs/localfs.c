@@ -102,7 +102,7 @@ static int _vfs_local_ls_drivers(vfs_ls_cb fn, void* data)
 
 static int _vfs_local_ls_common(const vfs_str_t* path, vfs_ls_cb fn, void* data)
 {
-    if (strcmp(path->str, "/") == 0)
+    if (vfs_path_is_native_root(path))
     {
         return _vfs_local_ls_drivers(fn, data);
     }
@@ -548,7 +548,7 @@ static vfs_str_t _vfs_local_get_access_path(const vfs_str_t* root, const char* p
     vfs_str_t local_path = vfs_str_dup(root);
 
     /* If \p root is '/', ignore it because \p path always contains leading slash. */
-    if (strcmp(local_path.str, "/") == 0)
+    if (vfs_path_is_root(&local_path))
     {
         vfs_str_reset(&local_path);
     }
@@ -566,6 +566,7 @@ static vfs_str_t _vfs_local_get_access_path(const vfs_str_t* root, const char* p
     }
 #endif
 
+    vfs_path_to_native(&local_path);
     return local_path;
 }
 
@@ -600,7 +601,6 @@ static int _vfs_localfs_open(struct vfs_operations* thiz, uintptr_t* fh, const c
 static int _vfs_localfs_stat_common(const vfs_str_t* path, vfs_stat_t* info)
 {
     vfs_nativate_stat_t buf;
-
     if (stat(path->str, &buf) < 0)
     {
         int errcode = errno;
@@ -693,14 +693,58 @@ static int _vfs_localfs_unlink(struct vfs_operations* thiz, const char* path)
     return ret;
 }
 
-int vfs_make_local(vfs_operations_t** fs, const char* root)
+static int _vfs_localfs_check_root(vfs_str_t* root)
+{
+    int ret;
+    if (vfs_path_is_root(root))
+    {
+        return 0;
+    }
+
+    /*
+     * For windows, we format the path to the windows style.
+     */
+#if defined(_WIN32)
+    vfs_path_to_unix(root);
+    vfs_str_remove_leading(root, '/');
+    vfs_str_remove_trailing(root, '/');
+    if (root->len <= 1 || root->str[1] != ':')
+    {
+        return VFS_EINVAL;
+    }
+    /* For driver root, we append slash so stat can check if it exist. */
+    if (root->len == 2)
+    {
+        vfs_str_append1(root, "/");
+    }
+#endif
+
+    vfs_stat_t info;
+    ret = _vfs_localfs_stat_common(root, &info);
+
+#if defined(_WIN32)
+    vfs_str_remove_trailing(root, '/');
+#endif
+
+    if (ret != 0)
+    {
+        return ret;
+    }
+    if (!(info.st_mode & VFS_S_IFDIR))
+    {
+        return VFS_ENOTDIR;
+    }
+    return 0;
+}
+
+static int _vfs_make_root(vfs_operations_t** fs, const vfs_str_t* root)
 {
     vfs_localfs_t* newfs = calloc(1, sizeof(vfs_localfs_t));
     if (newfs == NULL)
     {
         return -ENOMEM;
     }
-    newfs->root = vfs_str_from1(root);
+    newfs->root = vfs_str_dup(root);
 
     newfs->op.destroy = _vfs_local_destroy;
     newfs->op.ls = _vfs_local_ls;
@@ -716,4 +760,21 @@ int vfs_make_local(vfs_operations_t** fs, const char* root)
 
     *fs = &newfs->op;
     return 0;
+}
+
+int vfs_make_local(vfs_operations_t** fs, const char* root)
+{
+    int ret;
+    vfs_str_t root_path = vfs_str_from_static1(root);
+
+    if ((ret = _vfs_localfs_check_root(&root_path)) != 0)
+    {
+        goto finish;
+    }
+
+    ret = _vfs_make_root(fs, &root_path);
+
+finish:
+    vfs_str_exit(&root_path);
+    return ret;
 }

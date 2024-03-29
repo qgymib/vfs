@@ -294,6 +294,13 @@ int vfs_str_cmp2(const vfs_str_t* s1, const vfs_str_t* s2);
  */
 void vfs_str_remove_trailing(vfs_str_t* str, char c);
 
+/**
+ * @brief Remove leading \p c from the string.
+ * @param[in,out] str - String object.
+ * @param[in] c - Character to remove.
+ */
+void vfs_str_remove_leading(vfs_str_t* str, char c);
+
 #ifdef __cplusplus
 }
 #endif

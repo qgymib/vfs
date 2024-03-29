@@ -495,3 +495,36 @@ void vfs_str_remove_trailing(vfs_str_t* str, char c)
         str->str[str->len] = '\0';
     }
 }
+
+void vfs_str_remove_leading(vfs_str_t* str, char c)
+{
+    if (str->str == NULL)
+    {
+        return;
+    }
+
+    vfs_str_ensure_dynamic(str);
+
+    size_t pos = 0;
+    for (; pos < str->len; pos++)
+    {
+        if (str->str[pos] != c)
+        {
+            break;
+        }
+    }
+    if (pos >= str->len)
+    {
+        vfs_str_reset(str);
+        return;
+    }
+    if (pos == 0)
+    {
+        return;
+    }
+
+    size_t left_sz = str->len - pos;
+    memmove(str->str, str->str + pos, left_sz);
+    str->len = left_sz;
+    str->str[str->len] = '\0';
+}
