@@ -33,5 +33,5 @@ TEST_F(localfs, mkdir)
     ASSERT_EQ_INT(vfs->stat(vfs, path, &info), 0);
     ASSERT_EQ_UINT64(info.st_mode, VFS_S_IFDIR);
 
-    ASSERT_EQ_INT(vfs->rm(vfs, path, VFS_S_IFDIR), 0);
+    ASSERT_EQ_INT(vfs->rmdir(vfs, path), 0);
 }

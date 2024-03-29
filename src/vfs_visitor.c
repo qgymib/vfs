@@ -370,36 +370,6 @@ static int _vfs_visitor_write(struct vfs_operations* thiz, uintptr_t fh, const v
 }
 
 //////////////////////////////////////////////////////////////////////////
-// rm
-//////////////////////////////////////////////////////////////////////////
-
-typedef struct vfs_visitor_rm_helper
-{
-    int flags;
-} vfs_visitor_rm_helper_t;
-
-static int _vfs_visitor_rm_inner(vfs_mount_t* fs, const vfs_str_t* path, void* data)
-{
-    vfs_visitor_rm_helper_t* helper = data;
-    vfs_operations_t* op = fs->op;
-    if (op->rm == NULL)
-    {
-        return VFS_ENOSYS;
-    }
-
-    return op->rm(op, path->str, helper->flags);
-}
-
-static int _vfs_visitor_rm(struct vfs_operations* thiz, const char* path, int flags)
-{
-    (void)thiz;
-    vfs_visitor_rm_helper_t helper = { flags };
-
-    vfs_str_t path_str = vfs_str_from_static1(path);
-    return vfs_access_mount(&path_str, _vfs_visitor_rm_inner, &helper);
-}
-
-//////////////////////////////////////////////////////////////////////////
 // mkdir
 //////////////////////////////////////////////////////////////////////////
 
@@ -422,6 +392,52 @@ static int _vfs_visitor_mkdir(struct vfs_operations* thiz, const char* path)
     return vfs_access_mount(&path_str, _vfs_visitor_mkdir_inner, NULL);
 }
 
+//////////////////////////////////////////////////////////////////////////
+// rmdir
+//////////////////////////////////////////////////////////////////////////
+
+static int _vfs_visitor_rmdir_inner(vfs_mount_t* fs, const vfs_str_t* path, void* data)
+{
+    (void)data;
+
+    if (fs->op->rmdir == NULL)
+    {
+        return VFS_ENOSYS;
+    }
+
+    return fs->op->rmdir(fs->op, path->str);
+}
+
+static int _vfs_visitor_rmdir(struct vfs_operations* thiz, const char* path)
+{
+    (void)thiz;
+    vfs_str_t path_str = vfs_str_from_static1(path);
+    return vfs_access_mount(&path_str, _vfs_visitor_rmdir_inner, NULL);
+}
+
+//////////////////////////////////////////////////////////////////////////
+// unlink
+//////////////////////////////////////////////////////////////////////////
+
+static int _vfs_visitor_unlink_inner(vfs_mount_t* fs, const vfs_str_t* path, void* data)
+{
+    (void)data;
+
+    if (fs->op->unlink == NULL)
+    {
+        return VFS_ENOSYS;
+    }
+
+    return fs->op->unlink(fs->op, path->str);
+}
+
+static int _vfs_visitor_unlink(struct vfs_operations* thiz, const char* path)
+{
+    (void)thiz;
+    vfs_str_t path_str = vfs_str_from_static1(path);
+    return vfs_access_mount(&path_str, _vfs_visitor_unlink_inner, NULL);
+}
+
 vfs_operations_t* vfs_create_visitor(void)
 {
     vfs_visitor_t* visitor = malloc(sizeof(vfs_visitor_t));
@@ -438,8 +454,9 @@ vfs_operations_t* vfs_create_visitor(void)
     visitor->op.seek = _vfs_visitor_seek;
     visitor->op.read = _vfs_visitor_read;
     visitor->op.write = _vfs_visitor_write;
-    visitor->op.rm = _vfs_visitor_rm;
     visitor->op.mkdir = _vfs_visitor_mkdir;
+    visitor->op.rmdir = _vfs_visitor_rmdir;
+    visitor->op.unlink = _vfs_visitor_unlink;
 
     visitor->fh_gen = 1;
     vfs_map_init(&visitor->session_map, _vfs_visitor_cmp_session, NULL);

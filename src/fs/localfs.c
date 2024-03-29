@@ -597,46 +597,6 @@ static int _vfs_localfs_open(struct vfs_operations* thiz, uintptr_t* fh, const c
     return ret;
 }
 
-static int _vfs_localfs_rm_common(const vfs_str_t* path, int flags)
-{
-    int ret = 0;
-    if (flags & VFS_S_IFDIR)
-    {
-        if (rmdir(path->str) == 0)
-        {
-            return 0;
-        }
-        ret = errno;
-        ret = vfs_translate_sys_err(ret);
-    }
-
-    if (flags & VFS_S_IFREG)
-    {
-        if (unlink(path->str) == 0)
-        {
-            return 0;
-        }
-        ret = errno;
-        ret = vfs_translate_sys_err(ret);
-    }
-
-    return ret;
-}
-
-static int _vfs_localfs_rm(struct vfs_operations* thiz, const char* path, int flags)
-{
-    int ret;
-    vfs_localfs_t* fs = EV_CONTAINER_OF(thiz, vfs_localfs_t, op);
-
-    vfs_str_t actual_path = _vfs_local_get_access_path(&fs->root, path);
-    {
-        ret = _vfs_localfs_rm_common(&actual_path, flags);
-    }
-    vfs_str_exit(&actual_path);
-
-    return ret;
-}
-
 static int _vfs_localfs_stat_common(const vfs_str_t* path, vfs_stat_t* info)
 {
     vfs_nativate_stat_t buf;
@@ -679,6 +639,60 @@ static int _vfs_localfs_mkdir(struct vfs_operations* thiz, const char* path)
     return ret;
 }
 
+static int _vfs_localfs_rmdir_common(const vfs_str_t* path)
+{
+    if (rmdir(path->str) == 0)
+    {
+        return 0;
+    }
+
+    int ret = errno;
+    ret = vfs_translate_sys_err(ret);
+
+    return ret;
+}
+
+static int _vfs_localfs_rmdir(struct vfs_operations* thiz, const char* path)
+{
+    int ret;
+    vfs_localfs_t* fs = EV_CONTAINER_OF(thiz, vfs_localfs_t, op);
+
+    vfs_str_t actual_path = _vfs_local_get_access_path(&fs->root, path);
+    {
+        ret = _vfs_localfs_rmdir_common(&actual_path);
+    }
+    vfs_str_exit(&actual_path);
+
+    return ret;
+}
+
+static int _vfs_localfs_unlink_common(const vfs_str_t* path)
+{
+    if (unlink(path->str) == 0)
+    {
+        return 0;
+    }
+
+    int ret = errno;
+    ret = vfs_translate_sys_err(ret);
+
+    return ret;
+}
+
+static int _vfs_localfs_unlink(struct vfs_operations* thiz, const char* path)
+{
+    int ret;
+    vfs_localfs_t* fs = EV_CONTAINER_OF(thiz, vfs_localfs_t, op);
+
+    vfs_str_t actual_path = _vfs_local_get_access_path(&fs->root, path);
+    {
+        ret = _vfs_localfs_unlink_common(&actual_path);
+    }
+    vfs_str_exit(&actual_path);
+
+    return ret;
+}
+
 int vfs_make_local(vfs_operations_t** fs, const char* root)
 {
     vfs_localfs_t* newfs = calloc(1, sizeof(vfs_localfs_t));
@@ -696,8 +710,9 @@ int vfs_make_local(vfs_operations_t** fs, const char* root)
     newfs->op.seek = _vfs_localfs_seek;
     newfs->op.read = _vfs_localfs_read;
     newfs->op.write = _vfs_localfs_write;
-    newfs->op.rm = _vfs_localfs_rm;
     newfs->op.mkdir = _vfs_localfs_mkdir;
+    newfs->op.rmdir = _vfs_localfs_rmdir;
+    newfs->op.unlink = _vfs_localfs_unlink;
 
     *fs = &newfs->op;
     return 0;

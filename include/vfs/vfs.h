@@ -141,23 +141,6 @@ typedef struct vfs_operations
     int (*write)(struct vfs_operations* thiz, uintptr_t fh, const void* buf, size_t len);
 
     /**
-     * @brief Remove a file or directory.
-     *
-     * The \p flags indicate the item type of the \p path:
-     * - #VFS_S_IFDIR: The \p path is a directory.
-     * - #VFS_S_IFREG: The \p path is a regular file.
-     *
-     * @param[in] thiz - This object.
-     * @param[in] path - Path to the item. Encoding in UTF-8.
-     * @param[in] flags - Item type. Must be one of #vfs_stat_flag_t.
-     * @return - 0: On success.
-     * @return - #VFS_EISDIR: If \p flags is #VFS_S_IFREG but \p path is a directory.
-     * @return - #VFS_ENOTDIR: If \p flags is #VFS_S_IFDIR but \p path is a regular file.
-     * @return - #VFS_ENOTEMPTY: If \p path is a non-empty directory.
-     */
-    int (*rm)(struct vfs_operations* thiz, const char* path, int flags);
-
-    /**
      * @brief Create a directory.
      * @param[in] thiz - This object.
      * @param[in] path - Path to the directory. Encoding in UTF-8.
@@ -165,6 +148,24 @@ typedef struct vfs_operations
      * @return - -errno: On error.
      */
     int (*mkdir)(struct vfs_operations* thiz, const char* path);
+
+    /**
+     * @brief Remove a directory.
+     * @param[in] thiz - This object.
+     * @param[in] path - Path to the directory. Encoding in UTF-8.
+     * @return - 0: On success.
+     * @return - -errno: On error.
+     */
+    int (*rmdir)(struct vfs_operations* thiz, const char* path);
+
+    /**
+     * @brief Remove a file.
+     * @param[in] thiz - This object.
+     * @param[in] path - Path to the file. Encoding in UTF-8.
+     * @return - 0: On success.
+     * @return - -errno: On error.
+     */
+    int (*unlink)(struct vfs_operations* thiz, const char* path);
 } vfs_operations_t;
 
 /**

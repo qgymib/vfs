@@ -21,7 +21,7 @@ TEST_FIXTURE_TEARDOWN(localfs)
     vfs_exit();
 }
 
-TEST_F(localfs, rm)
+TEST_F(localfs, unlink)
 {
     vfs_operations_t* vfs = vfs_visitor();
     ASSERT_NE_PTR(vfs, NULL);
@@ -43,7 +43,7 @@ TEST_F(localfs, rm)
     ASSERT_EQ_UINT64(info.st_mode, VFS_S_IFREG);
     ASSERT_EQ_UINT64(info.st_size, 5);
 
-    ASSERT_EQ_INT(vfs->rm(vfs, file_path.str, VFS_S_IFREG), 0);
+    ASSERT_EQ_INT(vfs->unlink(vfs, file_path.str), 0);
     ASSERT_EQ_INT(vfs->stat(vfs, file_path.str, &info), VFS_ENOENT);
 
     vfs_str_exit(&file_path);
