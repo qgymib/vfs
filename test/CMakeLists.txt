@@ -7,6 +7,7 @@ add_executable(vfs_test
     case/localfs_seek.c
     case/localfs_stat.c
     case/localfs_unlink.c
+    case/nullfs.c
     case/overlayfs_ls.cpp
     case/overlayfs_mkdir.c
     case/overlayfs_read.c

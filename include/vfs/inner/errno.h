@@ -34,7 +34,7 @@
 
 /**
  * @brief Bad file descriptor.
-*/
+ */
 #if defined(EBADF)
 #   define VFS_EBADF        VFS__ERR(EBADF)
 #else
