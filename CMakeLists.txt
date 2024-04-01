@@ -29,6 +29,7 @@ endfunction()
 ###############################################################################
 add_library(${PROJECT_NAME}
     src/fs/localfs.c
+    src/fs/overlayfs.c
     src/utils/atomic.c
     src/utils/errcode.c
     src/utils/list.c

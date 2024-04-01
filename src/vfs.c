@@ -61,12 +61,12 @@ int vfs_init(void)
 {
     if (g_vfs != NULL)
     {
-        return -EALREADY;
+        return VFS_EALREADY;
     }
 
     if ((g_vfs = calloc(1, sizeof(vfs_ctx_t))) == NULL)
     {
-        return -ENOMEM;
+        return VFS_ENOMEM;
     }
     
     vfs_map_init(&g_vfs->mount_map, _vfs_map_cmp_mount, NULL);
@@ -115,7 +115,7 @@ int vfs_mount(const char* path, vfs_operations_t* op)
     if (orig != NULL)
     {
         free(node);
-        return -EALREADY;
+        return VFS_EALREADY;
     }
 
     return 0;
@@ -141,7 +141,7 @@ int vfs_unmount(const char* path)
     vfs_str_exit(&tmp_node.path);
     if (node == NULL)
     {
-        return -ENOENT;
+        return VFS_ENOENT;
     }
 
     vfs_release_mount(node);

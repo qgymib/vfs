@@ -36,7 +36,7 @@ TEST_F(localfs, seek)
     vfs_str_append2(&file_path, &g_exe_path);
 
     vfs_str_t exe_data = VFS_STR_INIT;
-    vfs_test_read_file(&exe_data, file_path.str);
+    vfs_test_read_file(vfs, file_path.str, &exe_data);
 
     size_t offset = 0;
     {

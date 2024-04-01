@@ -52,7 +52,7 @@ vfs_str_t vfs_path_parent(const vfs_str_t* path, vfs_str_t* basename)
         vfs_str_reset(basename);
         vfs_str_append(basename, path->str + pos + 1, path->len - pos - 1);
     }
-    return vfs_str_sub(path, 0, pos - 1);
+    return vfs_str_sub(path, 0, pos);
 }
 
 void vfs_path_to_native(vfs_str_t* str)
@@ -119,4 +119,49 @@ int vfs_path_is_native_root(const vfs_str_t* path)
 int vfs_path_is_root(const vfs_str_t* path)
 {
     return vfs_str_cmp1(path, "/") == 0 || vfs_str_cmp1(path, "\\") == 0;
+}
+
+int vfs_path_ensure_dir_exist(vfs_operations_t* fs, const vfs_str_t* path)
+{
+    int ret = 0;
+    int looping = 1;
+
+    size_t i;
+    for (i = 1; looping; i++)
+    {
+        vfs_str_t tmp = vfs_path_layer(path, i);
+        if (!VFS_STR_IS_EMPTY(&tmp))
+        {
+            ret = fs->mkdir(fs, tmp.str);
+            if (ret != 0 && ret != VFS_EEXIST)
+            {
+                looping = 0;
+            }
+            else
+            {
+                ret = 0;
+            }
+        }
+        else
+        {
+            looping = 0;
+        }
+        vfs_str_exit(&tmp);
+    }
+
+    return ret;
+}
+
+int vfs_path_ensure_parent_exist(vfs_operations_t* fs, const vfs_str_t* path)
+{
+    vfs_str_t parent = vfs_path_parent(path, NULL);
+    if (VFS_STR_IS_EMPTY(&parent))
+    {
+        return VFS_EIO;
+    }
+
+    int ret = vfs_path_ensure_dir_exist(fs, &parent);
+    vfs_str_exit(&parent);
+
+    return ret;
 }

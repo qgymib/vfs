@@ -42,7 +42,7 @@ TEST_F(localfs, ls_root)
     ASSERT_NE_PTR(vfs, NULL);
 
     ItemMap items;
-    vfs->ls(vfs, "/", _localfs_test_ls_cb, &items);
+    ASSERT_EQ_INT(vfs->ls(vfs, "/", _localfs_test_ls_cb, &items), 0);
 
     ASSERT_GT_SIZE(items.size(), 0);
 

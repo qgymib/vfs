@@ -1,6 +1,7 @@
 #ifndef __VFS_PATH_H__
 #define __VFS_PATH_H__
 
+#include "vfs/vfs.h"
 #include "utils/str.h"
 
 #ifdef __cplusplus
@@ -59,6 +60,22 @@ int vfs_path_is_native_root(const vfs_str_t* path);
  * @return true if \p path is a root.
  */
 int vfs_path_is_root(const vfs_str_t* path);
+
+/**
+ * @brief Ensure directory \p path is exist.
+ * @param[in] fs - File system object.
+ * @param[in] path - The path.
+ * @return 0 on success, or -errno on error.
+ */
+int vfs_path_ensure_dir_exist(vfs_operations_t* fs, const vfs_str_t* path);
+
+/**
+ * @brief Ensure parent of \p path is exist.
+ * @param[in] fs - File system object.
+ * @param[in] path - The path.
+ * @return 0 on success, or -errno on error.
+ */
+int vfs_path_ensure_parent_exist(vfs_operations_t* fs, const vfs_str_t* path);
 
 #ifdef __cplusplus
 }

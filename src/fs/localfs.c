@@ -118,7 +118,7 @@ static int _vfs_local_ls_common(const vfs_str_t* path, vfs_ls_cb fn, void* data)
     {
         if ((hFind = FindFirstFileA(copy_path.str, &ffd)) == INVALID_HANDLE_VALUE)
         {
-            ret = -ENOENT;
+            ret = VFS_ENOENT;
             break;
         }
 
@@ -372,6 +372,10 @@ static int _vfs_local_ls_common(const vfs_str_t* path, vfs_ls_cb fn, void* data)
         while ((d = readdir(dp)) != NULL)
         {
             vfs_str_resize(&copy_path, path->len);
+            if (strcmp(d->d_name, ".") == 0 || strcmp(d->d_name, "..") == 0)
+            {
+                continue;
+            }
 
             vfs_str_append1(&copy_path, "/");
             vfs_str_append1(&copy_path, d->d_name);
@@ -546,23 +550,22 @@ static void _vfs_local_destroy(struct vfs_operations* thiz)
 static vfs_str_t _vfs_local_get_access_path(const vfs_str_t* root, const char* path)
 {
     vfs_str_t local_path = vfs_str_dup(root);
+    if (strcmp(path, "/") == 0)
+    {
+        goto finish;
+    }
 
-    /* If \p root is '/', ignore it because \p path always contains leading slash. */
     if (vfs_path_is_root(&local_path))
     {
         vfs_str_reset(&local_path);
     }
     vfs_str_append1(&local_path, path);
 
-    /*
-     * For windows the leading '/' should be removed.
-     */
+finish:
 #if defined(_WIN32)
-    if (local_path.len >= 2 && local_path.str[0] == '/' && local_path.str[1] != '/')
+    if (!vfs_path_is_root(&local_path))
     {
-        vfs_str_t new_path = vfs_str_sub1(&local_path, 1);
-        vfs_str_exit(&local_path);
-        local_path = new_path;
+        vfs_str_remove_leading(&local_path, '/');
     }
 #endif
 

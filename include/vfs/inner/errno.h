@@ -27,9 +27,18 @@
  * @brief I/O error.
  */
 #if defined(EIO)
-#   define VFS_EIO			VFS__ERR(EIO)
+#   define VFS_EIO          VFS__ERR(EIO)
 #else
-#   define VFS_EIO			(-5)
+#   define VFS_EIO          (-5)
+#endif
+
+/**
+ * @brief Bad file descriptor.
+*/
+#if defined(EBADF)
+#   define VFS_EBADF        VFS__ERR(EBADF)
+#else
+#   define VFS_EBADF        (-9)
 #endif
 
 /**
@@ -99,6 +108,15 @@
 #   define VFS_ENOTEMPTY    VFS__ERR(ENOTEMPTY)
 #else
 #   define VFS_ENOTEMPTY    (-41)
+#endif
+
+/**
+ * @brief Operation already in progress.
+ */
+#if defined(EALREADY)
+#   define VFS_EALREADY     VFS__ERR(EALREADY)
+#else
+#   define VFS_EALREADY     (-103)
 #endif
 
 #endif

@@ -15,8 +15,8 @@ typedef enum vfs_open_flag
     VFS_O_WRONLY    = 0x0002,                       /**< Write only. */
     VFS_O_RDWR      = VFS_O_RDONLY | VFS_O_WRONLY,  /**< Read and write. */
 
-    VFS_O_APPEND    = 0x0004,                       /**< Append to file. It is conflict with #VFS_O_TRUNCATE. */
-    VFS_O_TRUNCATE  = 0x0008,                       /**< Truncate file to zero. It is conflict with #VFS_O_APPEND. */
+    VFS_O_APPEND    = 0x0004,                       /**< Append to file. The file must exist. It is conflict with #VFS_O_TRUNCATE. */
+    VFS_O_TRUNCATE  = 0x0008,                       /**< Truncate file to zero. The file must exist. It is conflict with #VFS_O_APPEND. */
     VFS_O_CREATE    = 0x0010,                       /**< Create file if not exist. */
 } vfs_open_flag_t;
 
@@ -77,6 +77,7 @@ typedef struct vfs_operations
      * @param[in] path - Path to file. Encoding in UTF-8.
      * @param[out] info - File stat.
      * @return - 0: on success.
+     * @return - #VFS_ENOENT: No such file or directory.
      * @return - -errno: on error.
     */
     int (*stat)(struct vfs_operations* thiz, const char* path, vfs_stat_t* info);
@@ -145,6 +146,7 @@ typedef struct vfs_operations
      * @param[in] thiz - This object.
      * @param[in] path - Path to the directory. Encoding in UTF-8.
      * @return - 0: On success.
+     * @return - #VFS_EEXIST: The directory already exists.
      * @return - -errno: On error.
      */
     int (*mkdir)(struct vfs_operations* thiz, const char* path);
@@ -154,6 +156,8 @@ typedef struct vfs_operations
      * @param[in] thiz - This object.
      * @param[in] path - Path to the directory. Encoding in UTF-8.
      * @return - 0: On success.
+     * @return - #VFS_ENOENT: No such file or directory.
+     * @return - #VFS_NOTDIR: \p path is not a directory.
      * @return - -errno: On error.
      */
     int (*rmdir)(struct vfs_operations* thiz, const char* path);
@@ -163,6 +167,8 @@ typedef struct vfs_operations
      * @param[in] thiz - This object.
      * @param[in] path - Path to the file. Encoding in UTF-8.
      * @return - 0: On success.
+     * @return - #VFS_ENOENT: No such file or directory.
+     * @return - #VFS_EISDIR: \p path is a directory.
      * @return - -errno: On error.
      */
     int (*unlink)(struct vfs_operations* thiz, const char* path);

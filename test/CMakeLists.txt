@@ -1,15 +1,23 @@
 
 add_executable(vfs_test
     case/localfs_ls.cpp
-    case/localfs_mkdir.cpp
-    case/localfs_mount.cpp
-    case/localfs_read.cpp
-    case/localfs_seek.cpp
-    case/localfs_stat.cpp
-    case/localfs_unlink.cpp
+    case/localfs_mkdir.c
+    case/localfs_mount.c
+    case/localfs_read.c
+    case/localfs_seek.c
+    case/localfs_stat.c
+    case/localfs_unlink.c
+    case/overlayfs_ls.cpp
+    case/overlayfs_mkdir.c
+    case/overlayfs_read.c
+    case/overlayfs_rmdir.c
+    case/overlayfs_stat.c
+    case/overlayfs_unlink.c
+    case/overlayfs_write.c
     utils/cwdpath.c
     utils/exepath.c
     utils/file.c
+    utils/overlayfs_builder.c
     main.c
     test.c
 )

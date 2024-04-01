@@ -8,6 +8,7 @@
 #define VFS_ERR_MAP(xx) \
     xx(ENOENT)      \
     xx(EIO)         \
+    xx(EBADF)       \
     xx(ENOMEM)      \
     xx(EACCES)      \
     xx(EEXIST)      \
@@ -15,7 +16,8 @@
     xx(EISDIR)      \
     xx(EINVAL)      \
     xx(ENOSYS)      \
-    xx(ENOTEMPTY)
+    xx(ENOTEMPTY)   \
+    xx(EALREADY)
 
 static int _vfs_map_native_error_to_vfs(int errcode)
 {

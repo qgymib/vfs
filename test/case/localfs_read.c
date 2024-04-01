@@ -36,7 +36,7 @@ TEST_F(localfs, read)
     vfs_str_append2(&mount_path, &g_exe_path);
 
     vfs_str_t exe_data = VFS_STR_INIT;
-    vfs_test_read_file(&exe_data, mount_path.str);
+    vfs_test_read_file(vfs, mount_path.str, &exe_data);
 
     /* Check the magic string. */
     {

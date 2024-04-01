@@ -25,7 +25,6 @@ typedef struct vfs_session
 typedef struct vfs_visitor_s
 {
     vfs_operations_t    op;                 /**< File system operations. */
-    vfs_atomic64_t      fh_gen;             /**< File handle generator. */
     ev_map_t            session_map;        /**< Session map. See #vfs_session_t. */
     vfs_rwlock_t        session_map_lock;   /**< Session map lock. */
 } vfs_visitor_t;

@@ -124,6 +124,15 @@ void vfs_str_exit(vfs_str_t* str);
 void vfs_str_ensure_dynamic(vfs_str_t* str);
 
 /**
+ * @brief Insert data at \p pos.
+ * @param[in,out] str - String object.
+ * @param[in] pos - Position in bytes.
+ * @param[in] data - Data to insert.
+ * @param[in] size - Data size in bytes.
+ */
+void vfs_str_insert(vfs_str_t* str, size_t pos, const char* data, size_t size);
+
+/**
  * @brief Append data to the string.
  * @param[in,out] str - String object.
  * @param[in] data - Data to append.

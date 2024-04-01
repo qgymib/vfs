@@ -12,6 +12,9 @@ static void _vfs_visitor_dec_session(vfs_session_t* session)
 
     if (session->mount != NULL)
     {
+        vfs_operations_t* fs = session->mount->op;
+        fs->close(fs, session->real);
+
         vfs_release_mount(session->mount);
         session->mount = NULL;
     }
@@ -193,16 +196,18 @@ static int _vfs_visitor_open_inner(vfs_mount_t* fs, const vfs_str_t* path, void*
         return -ENOMEM;
     }
     session->refcnt = 1;
-    session->fake = vfs_atomic64_add(&visitor->fh_gen);
+    session->fake = (uintptr_t)session;
     session->real = 0;
-    session->mount = fs;
-    (void)vfs_atomic_add(&fs->refcnt);
+    session->mount = NULL;
 
     if ((ret = op->open(op, &session->real, path->str, helper->flags)) != 0)
     {
         _vfs_visitor_dec_session(session);
         return ret;
     }
+
+    session->mount = fs;
+    (void)vfs_atomic_add(&fs->refcnt);
 
     ev_map_node_t* orig;
     vfs_rwlock_wrlock(&visitor->session_map_lock);
@@ -458,7 +463,6 @@ vfs_operations_t* vfs_create_visitor(void)
     visitor->op.rmdir = _vfs_visitor_rmdir;
     visitor->op.unlink = _vfs_visitor_unlink;
 
-    visitor->fh_gen = 1;
     vfs_map_init(&visitor->session_map, _vfs_visitor_cmp_session, NULL);
     vfs_rwlock_init(&visitor->session_map_lock);
 

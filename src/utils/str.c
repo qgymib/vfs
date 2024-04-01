@@ -203,6 +203,28 @@ void vfs_str_ensure_dynamic(vfs_str_t* str)
     str->str[str->len] = '\0';
 }
 
+void vfs_str_insert(vfs_str_t* str, size_t pos, const char* data, size_t size)
+{
+    if (pos > str->len)
+    {
+        abort();
+    }
+    if (pos == str->len)
+    {
+        vfs_str_append(str, data, size);
+        return;
+    }
+
+    const size_t required_sz = str->len + size;
+    _vfs_str_ensure_capacity(str, required_sz + 1);
+
+    size_t move_sz = str->len - pos;
+    memmove(str->str + pos + size, str->str + pos, move_sz);
+    memcpy(str->str + pos, data, size);
+    str->len = required_sz;
+    str->str[str->len] = '\0';
+}
+
 vfs_str_t vfs_str_from_static(const char* data, size_t size)
 {
     vfs_str_t str = { (char*)data, size, 0 };
@@ -224,6 +246,11 @@ vfs_str_t vfs_str_from(const char* data, size_t size)
 
 vfs_str_t vfs_str_from1(const char* data)
 {
+    if (data == NULL)
+    {
+        return (vfs_str_t)VFS_STR_INIT;
+    }
+
     size_t size = strlen(data);
     return vfs_str_from(data, size);
 }
