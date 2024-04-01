@@ -530,7 +530,7 @@ static int64_t _vfs_localfs_seek(struct vfs_operations* thiz, uintptr_t fh, int6
 
 static int _vfs_localfs_mkdir_common(const vfs_str_t* path)
 {
-    if (mkdir(path->str, 0) < 0)
+    if (mkdir(path->str, 0777) < 0)
     {
         int errcode = errno;
         return vfs_translate_sys_err(errcode);

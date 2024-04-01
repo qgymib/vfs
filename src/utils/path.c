@@ -133,13 +133,11 @@ int vfs_path_ensure_dir_exist(vfs_operations_t* fs, const vfs_str_t* path)
         if (!VFS_STR_IS_EMPTY(&tmp))
         {
             ret = fs->mkdir(fs, tmp.str);
-            if (ret != 0 && ret != VFS_EEXIST)
+
+            /* temporary treat #VFS_EACCES as normal, as long as the last directory is ok. */
+            if (ret != 0 && ret != VFS_EEXIST && ret != VFS_EACCES)
             {
                 looping = 0;
-            }
-            else
-            {
-                ret = 0;
             }
         }
         else
@@ -147,6 +145,11 @@ int vfs_path_ensure_dir_exist(vfs_operations_t* fs, const vfs_str_t* path)
             looping = 0;
         }
         vfs_str_exit(&tmp);
+    }
+
+    if (ret == VFS_EEXIST)
+    {
+        return 0;
     }
 
     return ret;

@@ -17,7 +17,8 @@ typedef struct overlayfs_rmdir_helper
 static void _overlayfs_quick_ensure_dir(overlayfs_quick_t* quick, const vfs_str_t* path)
 {
     vfs_operations_t* fs = quick->fs_local;
-    ASSERT_EQ_INT(vfs_path_ensure_dir_exist(fs, path), 0);
+    ASSERT_EQ_INT(vfs_path_ensure_dir_exist(fs, path), 0,
+        "path:%s", path->str);
 }
 
 static void _overlayfs_quick_build_generic_item(overlayfs_quick_t* quick, const vfs_str_t* path, vfs_stat_flag_t type)
@@ -154,7 +155,8 @@ overlayfs_quick_t* vfs_overlayfs_quick_make(const char* mount,
     quick->lower_path = vfs_str_dup(&quick->cwd_path);
     vfs_str_append1(&quick->lower_path, "/lower");
     _overlayfs_quick_ensure_dir(quick, &quick->lower_path);
-    ASSERT_EQ_INT(vfs_make_local(&quick->fs_lower, quick->lower_path.str), 0);
+    ASSERT_EQ_INT(vfs_make_local(&quick->fs_lower, quick->lower_path.str), 0,
+        "path:%s", quick->lower_path.str);
 
     quick->upper_path = vfs_str_dup(&quick->cwd_path);
     vfs_str_append1(&quick->upper_path, "/upper");
