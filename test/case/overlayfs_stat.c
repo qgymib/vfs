@@ -39,7 +39,7 @@ TEST_FIXTURE_TEARDOWN(overlayfs)
 TEST_F(overlayfs, stat)
 {
     vfs_stat_t info;
-    vfs_operations_t* fs = vfs_visitor();
+    vfs_operations_t* fs = vfs_visitor_instance();
     ASSERT_NE_PTR(fs, NULL);
 
     /* This directory is not whiteout. */

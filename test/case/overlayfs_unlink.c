@@ -35,7 +35,7 @@ TEST_FIXTURE_TEARDOWN(overlayfs)
 TEST_F(overlayfs, unlink)
 {
     vfs_stat_t info;
-    vfs_operations_t* vfs = vfs_visitor();
+    vfs_operations_t* vfs = vfs_visitor_instance();
     ASSERT_NE_PTR(vfs, NULL);
 
     /* unlink a whiteouted file. */

@@ -35,7 +35,7 @@ TEST_FIXTURE_TEARDOWN(overlayfs)
 
 TEST_F(overlayfs, rmdir)
 {
-    vfs_operations_t* vfs = vfs_visitor();
+    vfs_operations_t* vfs = vfs_visitor_instance();
     ASSERT_NE_PTR(vfs, NULL);
 
     const char* path = TEST_OVERLAY_MOUNT_PATH "foo/bar";

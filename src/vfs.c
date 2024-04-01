@@ -149,7 +149,7 @@ int vfs_unmount(const char* path)
     return 0;
 }
 
-vfs_operations_t* vfs_visitor(void)
+vfs_operations_t* vfs_visitor_instance(void)
 {
     return g_vfs->visitor;
 }

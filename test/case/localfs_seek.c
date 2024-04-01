@@ -26,7 +26,7 @@ TEST_FIXTURE_TEARDOWN(localfs)
 
 TEST_F(localfs, seek)
 {
-    vfs_operations_t* vfs = vfs_visitor();
+    vfs_operations_t* vfs = vfs_visitor_instance();
     ASSERT_NE_PTR(vfs, NULL);
 
     vfs_str_t file_path = vfs_str_from1(LOCALFS_TEST_MOUNT_PATH);

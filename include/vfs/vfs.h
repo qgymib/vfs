@@ -216,7 +216,7 @@ int vfs_unmount(const char* path);
  * @warning Do not destroy the returned object.
  * @return File system object.
  */
-vfs_operations_t* vfs_visitor(void);
+vfs_operations_t* vfs_visitor_instance(void);
 
 #ifdef __cplusplus
 }

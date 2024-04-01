@@ -51,7 +51,7 @@ static int _localfs_test_ls_cb(const char* name, const vfs_stat_t* stat, void* d
 
 TEST_F(overlayfs, ls)
 {
-    vfs_operations_t* vfs = vfs_visitor();
+    vfs_operations_t* vfs = vfs_visitor_instance();
     ASSERT_NE_PTR(vfs, NULL);
 
     ItemMap items;

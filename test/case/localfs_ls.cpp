@@ -38,7 +38,7 @@ TEST_F(localfs, ls_root)
         ASSERT_EQ_INT(vfs_mount("/", fs), 0);
     }
 
-    vfs_operations_t* vfs = vfs_visitor();
+    vfs_operations_t* vfs = vfs_visitor_instance();
     ASSERT_NE_PTR(vfs, NULL);
 
     ItemMap items;
@@ -84,7 +84,7 @@ TEST_P(localfs, ls_mount)
         ASSERT_EQ_INT(vfs_mount(mount_path, fs), 0);
     }
 
-    vfs_operations_t* vfs = vfs_visitor();
+    vfs_operations_t* vfs = vfs_visitor_instance();
     ASSERT_NE_PTR(vfs, NULL);
 
     {

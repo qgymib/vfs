@@ -37,7 +37,7 @@ TEST_FIXTURE_TEARDOWN(overlayfs)
 
 TEST_F(overlayfs, write)
 {
-    vfs_operations_t* vfs = vfs_visitor();
+    vfs_operations_t* vfs = vfs_visitor_instance();
     ASSERT_NE_PTR(vfs, NULL);
 
     {

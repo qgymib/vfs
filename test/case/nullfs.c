@@ -27,7 +27,7 @@ static int _test_nullfs_ls_cb(const char* name, const vfs_stat_t* stat, void* da
 
 TEST_F(nullfs, ls)
 {
-    vfs_operations_t* vfs = vfs_visitor();
+    vfs_operations_t* vfs = vfs_visitor_instance();
     ASSERT_NE_PTR(vfs, NULL);
 
     {
@@ -46,7 +46,7 @@ TEST_F(nullfs, ls)
 
 TEST_F(nullfs, stat)
 {
-    vfs_operations_t* vfs = vfs_visitor();
+    vfs_operations_t* vfs = vfs_visitor_instance();
     ASSERT_NE_PTR(vfs, NULL);
 
     vfs_stat_t info;
@@ -63,7 +63,7 @@ TEST_F(nullfs, stat)
 
 TEST_F(nullfs, open_close)
 {
-    vfs_operations_t* vfs = vfs_visitor();
+    vfs_operations_t* vfs = vfs_visitor_instance();
     ASSERT_NE_PTR(vfs, NULL);
 
     uintptr_t fh = 0;
@@ -84,7 +84,7 @@ TEST_F(nullfs, open_close)
 
 TEST_F(nullfs, seek)
 {
-    vfs_operations_t* vfs = vfs_visitor();
+    vfs_operations_t* vfs = vfs_visitor_instance();
     ASSERT_NE_PTR(vfs, NULL);
 
     uintptr_t fh = 0;

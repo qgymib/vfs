@@ -23,7 +23,7 @@ TEST_FIXTURE_TEARDOWN(localfs)
 
 TEST_F(localfs, mkdir)
 {
-    vfs_operations_t* vfs = vfs_visitor();
+    vfs_operations_t* vfs = vfs_visitor_instance();
     ASSERT_NE_PTR(vfs, NULL);
 
     const char* path = LOCALFS_TEST_MOUNT_PATH "test_mkdir";
