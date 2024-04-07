@@ -1,7 +1,7 @@
 #include <string.h>
 #include "test.h"
 #include "vfs/fs/localfs.h"
-#include "utils/file.h"
+#include "utils/fsbuilder.h"
 
 #define LOCALFS_TEST_MOUNT_PATH "/vfs"
 #define LOCALFS_TEST_MAGIC      "122c41eb-739d-4da7-b605-634e57a28d3d"

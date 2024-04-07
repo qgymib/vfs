@@ -1,7 +1,7 @@
-#ifndef __VFS_PATH_H__
-#define __VFS_PATH_H__
+#ifndef __VFS_DIR_INNER_H__
+#define __VFS_DIR_INNER_H__
 
-#include "vfs/vfs.h"
+#include "vfs/utils/dir.h"
 #include "utils/str.h"
 
 #ifdef __cplusplus

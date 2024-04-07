@@ -4,7 +4,7 @@
 #include "vfs/fs/overlayfs.h"
 #include "utils/defs.h"
 #include "utils/strlist.h"
-#include "utils/path.h"
+#include "utils/dir.h"
 #include "utils/map.h"
 
 /**

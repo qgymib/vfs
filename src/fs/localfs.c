@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include "vfs/fs/localfs.h"
 #include "utils/defs.h"
-#include "utils/path.h"
+#include "utils/dir.h"
 #include "utils/errcode.h"
 
 typedef struct vfs_localfs

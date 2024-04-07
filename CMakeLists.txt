@@ -29,14 +29,16 @@ endfunction()
 ###############################################################################
 add_library(${PROJECT_NAME}
     src/fs/localfs.c
+    src/fs/memfs.c
     src/fs/nullfs.c
     src/fs/overlayfs.c
     src/utils/atomic.c
+    src/utils/dir.c
     src/utils/errcode.c
+    src/utils/file.c
     src/utils/list.c
     src/utils/map.c
     src/utils/mutex.c
-    src/utils/path.c
     src/utils/rwlock.c
     src/utils/sem.c
     src/utils/str.c

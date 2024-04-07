@@ -1,6 +1,6 @@
 #include "test.h"
 #include "utils/overlayfs_builder.h"
-#include "utils/file.h"
+#include "utils/fsbuilder.h"
 
 #define TEST_OVERLAY_MOUNT_PATH "file:///test/overlayfs"
 
@@ -24,8 +24,8 @@ TEST_FIXTURE_SETUP(overlayfs)
         s_lower_items, s_upper_items);
     ASSERT_NE_PTR(s_test_overlayfs_read, NULL);
 
-    vfs_test_write_file(s_test_overlayfs_read->fs_lower, "/foo/hello", "hello", 5);
-    vfs_test_write_file(s_test_overlayfs_read->fs_upper, "/foo/hello", "world", 5);
+    vfs_file_write(s_test_overlayfs_read->fs_lower, "/foo/hello", VFS_O_WRONLY | VFS_O_CREATE, "hello", 5);
+    vfs_file_write(s_test_overlayfs_read->fs_upper, "/foo/hello", VFS_O_WRONLY | VFS_O_CREATE, "world", 5);
 }
 
 TEST_FIXTURE_TEARDOWN(overlayfs)

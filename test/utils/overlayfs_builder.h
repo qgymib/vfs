@@ -4,16 +4,11 @@
 #include "vfs/fs/localfs.h"
 #include "vfs/fs/overlayfs.h"
 #include "utils/str.h"
+#include "utils/fsbuilder.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-typedef struct vfs_fsbuilder_item
-{
-    const char*     name;           /**< File name. */
-    vfs_stat_flag_t type;           /**< File type. */
-} vfs_fsbuilder_item_t;
 
 typedef struct overlayfs_quick
 {

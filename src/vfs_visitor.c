@@ -150,11 +150,20 @@ static int _vfs_visitor_stat_inner(vfs_mount_t* fs, const vfs_str_t* path, void*
     vfs_visitor_stat_helper_t* helper = data;
     vfs_operations_t* op = fs->op;
 
+    /* Special case for `/`. */
+    if (vfs_str_cmp1(path, "/") == 0)
+    {
+        helper->info->st_mode = VFS_S_IFDIR;
+        helper->info->st_mtime = 0;
+        helper->info->st_size = 0;
+        return 0;
+    }
+
+    /* Normal case for sub-elements. */
     if (op->stat == NULL)
     {
         return VFS_ENOSYS;
     }
-
     return op->stat(op, path->str, helper->info);
 }
 

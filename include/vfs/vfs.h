@@ -52,27 +52,30 @@ typedef int (*vfs_ls_cb)(const char* name, const vfs_stat_t* stat, void* data);
 typedef struct vfs_operations
 {
     /**
-     * @brief Destroy the filesystem object.
+     * @brief Destroy the file system object.
      *
-     * It is guarantee that there are no other references to the filesystem,
-     * and no more calls to the filesystem will be made.
+     * It is guarantee that there are no other references to the file system,
+     * and no more calls to the file system will be made.
      *
      * @param[in] thiz - This object.
      */
     void (*destroy)(struct vfs_operations* thiz);
 
     /**
-     * @brief (Optional) List items in directory.
-     * @param[in] thiz - This object.
-     * @param[in] url - Path to the directory. Encoding in UTF-8.
-     * @param[in] cb - Callback function.
-     * @param[in] data - user data which must be passed to the callback.
-     * @return 0 on success, or -errno on error.
-     */
-    int (*ls)(struct vfs_operations* thiz, const char* path, vfs_ls_cb fn, void* data);
-
-    /**
-     * @brief (Optional) Get file stat.
+     * @brief (Optional) Get file or directory stat.
+     *
+     * The path is not the actual path of the file or directory, but is the
+     * relative path to the mount point.
+     *
+     * For example, if a http file system is mounted at `/mnt/http`, accessing
+     * to `/mnt/http/index.html` via VFS will be access to `/index.html` for
+     * this file system instance.
+     *
+     * This access rule is applicable to all VFS calls.
+     *
+     * @note The special directory `/` should always present. Although this case
+     *   is handled by the VFS visitor implementation, there is always a case
+     *   that user access the file system directly by raw file system handler.
      * @param[in] thiz - This object.
      * @param[in] path - Path to file. Encoding in UTF-8.
      * @param[out] info - File stat.
@@ -83,7 +86,19 @@ typedef struct vfs_operations
     int (*stat)(struct vfs_operations* thiz, const char* path, vfs_stat_t* info);
 
     /**
+     * @brief (Optional) List items in directory.
+     * @see #vfs_operations_t::stat().
+     * @param[in] thiz - This object.
+     * @param[in] url - Path to the directory. Encoding in UTF-8.
+     * @param[in] cb - Callback function.
+     * @param[in] data - user data which must be passed to the callback.
+     * @return 0 on success, or -errno on error.
+     */
+    int (*ls)(struct vfs_operations* thiz, const char* path, vfs_ls_cb fn, void* data);
+
+    /**
      * @brief (Optional) Open file in binary mode.
+     * @see #vfs_operations_t::stat().
      * @param[in] thiz - This object.
      * @param[out] fh - File handle.
      * @param[in] path - Path to file. Encoding in UTF-8.
@@ -143,6 +158,7 @@ typedef struct vfs_operations
 
     /**
      * @brief Create a directory.
+     * @see #vfs_operations_t::stat().
      * @param[in] thiz - This object.
      * @param[in] path - Path to the directory. Encoding in UTF-8.
      * @return - 0: On success.
@@ -153,6 +169,7 @@ typedef struct vfs_operations
 
     /**
      * @brief Remove a directory.
+     * @see #vfs_operations_t::stat().
      * @param[in] thiz - This object.
      * @param[in] path - Path to the directory. Encoding in UTF-8.
      * @return - 0: On success.
@@ -164,6 +181,7 @@ typedef struct vfs_operations
 
     /**
      * @brief Remove a file.
+     * @see #vfs_operations_t::stat().
      * @param[in] thiz - This object.
      * @param[in] path - Path to the file. Encoding in UTF-8.
      * @return - 0: On success.
