@@ -1,7 +1,11 @@
 cmake_minimum_required(VERSION 3.5)
 project(vfs)
 
+# add custom cmake files
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/third_party/cmake-modules")
+
 option(VFS_ASAN "Enable AddressSanitizer" OFF)
+option(VFS_GCOV "Enable coverage. This option does not work when compiler is not gcc." OFF)
 
 ###############################################################################
 # Functions
@@ -62,6 +66,10 @@ vfs_setup_target_wall(${PROJECT_NAME})
 
 if (VFS_ASAN)
     vfs_setup_asan(${PROJECT_NAME})
+endif ()
+if (VFS_GCOV)
+    include(CodeCoverage)
+    append_coverage_compiler_flags_to_target(${PROJECT_NAME})
 endif ()
 
 ###############################################################################

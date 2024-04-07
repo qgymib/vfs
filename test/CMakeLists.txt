@@ -6,6 +6,7 @@ add_executable(vfs_test
     case/localfs_read.c
     case/localfs_seek.c
     case/localfs_stat.c
+    case/localfs_truncate.c
     case/localfs_unlink.c
     case/memfs_stat.c
     case/nullfs.c
@@ -26,6 +27,13 @@ add_executable(vfs_test
 
 if (VFS_ASAN)
     vfs_setup_asan(vfs_test)
+endif ()
+if (VFS_GCOV)
+    setup_target_for_coverage_lcov(
+        NAME vfs_coverage
+        EXECUTABLE vfs_test
+        EXCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/*" "/usr/include/c++/*"
+    )
 endif ()
 
 vfs_setup_target_wall(vfs_test)

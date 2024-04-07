@@ -2,10 +2,12 @@
 #include <string.h>
 #include <assert.h>
 #include "vfs/fs/overlayfs.h"
+#include "utils/atomic.h"
 #include "utils/defs.h"
 #include "utils/strlist.h"
 #include "utils/dir.h"
 #include "utils/map.h"
+#include "utils/mutex.h"
 
 /**
  * @brief Suffix for whiteout files or directories.
@@ -46,6 +48,8 @@ typedef struct vfs_overlayfs_stat_helper
 typedef struct vfs_overlayfs_session
 {
     ev_map_node_t       node;       /**< Map node. */
+    vfs_atomic_t        refcnt;     /**< Reference count. */
+
     vfs_operations_t*   fs;         /**< The file system working on. */
     uintptr_t           fake;       /**< Fake file handle. */
 
@@ -77,6 +81,11 @@ typedef struct vfs_overlayfs
      * @see #vfs_overlayfs_session_t.
      */
     ev_map_t            session_map;
+
+    /**
+     * @brief Mutex for #vfs_overlayfs_t::session_map.
+     */
+    vfs_mutex_t         session_map_lock;
 } vfs_overlayfs_t;
 
 static int _vfs_overlayfs_cmp_session(const ev_map_node_t* key1, const ev_map_node_t* key2, void* arg)
@@ -157,8 +166,18 @@ static int _vfs_overlayfs_common_is_parent_exist(vfs_overlayfs_t* fs, const vfs_
     return ret;
 }
 
-static void _vfs_overlayfs_common_destroy_session(vfs_overlayfs_session_t* session)
+static void _vfs_overlayfs_common_acquire_session(vfs_overlayfs_session_t* session)
 {
+    (void)vfs_atomic_add(&session->refcnt);
+}
+
+static void _vfs_overlayfs_common_release_session(vfs_overlayfs_session_t* session)
+{
+    if (vfs_atomic_dec(&session->refcnt) != 0)
+    {
+        return;
+    }
+
     if (session->fs != NULL)
     {
         session->fs->close(session->fs, session->real);
@@ -168,18 +187,32 @@ static void _vfs_overlayfs_common_destroy_session(vfs_overlayfs_session_t* sessi
     free(session);
 }
 
+/**
+ * @brief Find session by \p fh file handle. If found, refcnt is increased.
+ * @param[in] fs - File system instance.
+ * @param[in] fh - File handle.
+ * @return Found session, or NULL if not found.
+ */
 static vfs_overlayfs_session_t* _vfs_overlayfs_common_find_session(vfs_overlayfs_t* fs, uintptr_t fh)
 {
     vfs_overlayfs_session_t tmp_session;
     tmp_session.fake = fh;
 
-    ev_map_node_t* it = vfs_map_find(&fs->session_map, &tmp_session.node);
-    if (it == NULL)
+    vfs_overlayfs_session_t* session = NULL;
+    vfs_mutex_enter(&fs->session_map_lock);
+    do 
     {
-        return NULL;
-    }
+        ev_map_node_t* it = vfs_map_find(&fs->session_map, &tmp_session.node);
+        if (it == NULL)
+        {
+            break;
+        }
+        session = EV_CONTAINER_OF(it, vfs_overlayfs_session_t, node);
+        _vfs_overlayfs_common_acquire_session(session);
+    } while (0);
+    vfs_mutex_leave(&fs->session_map_lock);
 
-    return EV_CONTAINER_OF(it, vfs_overlayfs_session_t, node);
+    return session;
 }
 
 static int _vfs_overlayfs_common_stat_wrap_ls(const char* name, const vfs_stat_t* stat, void* data)
@@ -306,6 +339,22 @@ static int _vfs_overlayfs_common_stat_ex(vfs_overlayfs_t* fs, const vfs_str_t* p
     return VFS_OVERLAYFS_STAT_NOENT;
 }
 
+static int _vfs_overlayfs_common_fh(vfs_overlayfs_t* fs, uintptr_t fh,
+    int (*cb)(vfs_overlayfs_session_t* session, void* data), void* data)
+{
+    int ret;
+    vfs_overlayfs_session_t* session = _vfs_overlayfs_common_find_session(fs, fh);
+    if (session == NULL)
+    {
+        return VFS_EBADF;
+    }
+
+    ret = cb(session, data);
+    _vfs_overlayfs_common_release_session(session);
+
+    return ret;
+}
+
 //////////////////////////////////////////////////////////////////////////
 // destroy
 //////////////////////////////////////////////////////////////////////////
@@ -313,12 +362,19 @@ static int _vfs_overlayfs_common_stat_ex(vfs_overlayfs_t* fs, const vfs_str_t* p
 static void _vfs_overlayfs_destroy_cleanup(vfs_overlayfs_t* fs)
 {
     ev_map_node_t* it;
+
+    vfs_mutex_enter(&fs->session_map_lock);
     while ((it = vfs_map_begin(&fs->session_map)) != NULL)
     {
         vfs_overlayfs_session_t* session = EV_CONTAINER_OF(it, vfs_overlayfs_session_t, node);
         vfs_map_erase(&fs->session_map, it);
-        _vfs_overlayfs_common_destroy_session(session);
+        vfs_mutex_leave(&fs->session_map_lock);
+        {
+            _vfs_overlayfs_common_release_session(session);
+        }
+        vfs_mutex_enter(&fs->session_map_lock);
     }
+    vfs_mutex_leave(&fs->session_map_lock);
 }
 
 static void _vfs_overlayfs_destroy(struct vfs_operations* thiz)
@@ -339,6 +395,7 @@ static void _vfs_overlayfs_destroy(struct vfs_operations* thiz)
         fs->upper = NULL;
     }
 
+    vfs_mutex_exit(&fs->session_map_lock);
     free(fs);
 }
 
@@ -605,6 +662,7 @@ static int _vfs_overlayfs_open_with_fs(vfs_overlayfs_t* fs, vfs_operations_t* op
     {
         return VFS_ENOMEM;
     }
+    session->refcnt = 1;
     session->fs = NULL;
     session->fake = (uintptr_t)session;
     session->real = 0;
@@ -612,13 +670,19 @@ static int _vfs_overlayfs_open_with_fs(vfs_overlayfs_t* fs, vfs_operations_t* op
     /* Open file. */
     if ((ret = op->open(op, &session->real, path->str, flags)) != 0)
     {
-        _vfs_overlayfs_common_destroy_session(session);
+        _vfs_overlayfs_common_release_session(session);
         return ret;
     }
     session->fs = op;
 
     /* Save session. */
-    ev_map_node_t* orig = vfs_map_insert(&fs->session_map, &session->node);
+    ev_map_node_t* orig;
+    vfs_mutex_enter(&fs->session_map_lock);
+    {
+        orig = vfs_map_insert(&fs->session_map, &session->node);
+    }
+    vfs_mutex_leave(&fs->session_map_lock);
+    
     if (orig != NULL)
     {/* Should not happen. */
         abort();
@@ -769,73 +833,140 @@ static int _vfs_overlayfs_close(struct vfs_operations* thiz, uintptr_t fh)
         return VFS_EBADF;
     }
 
+    /* Remove record. */
     vfs_map_erase(&fs->session_map, &session->node);
-    _vfs_overlayfs_common_destroy_session(session);
+
+    /* Release session caused by #_vfs_overlayfs_common_find_session(). */
+    _vfs_overlayfs_common_release_session(session);
+    /* Release session caused by creation. */
+    _vfs_overlayfs_common_release_session(session);
 
     return 0;
+}
+
+//////////////////////////////////////////////////////////////////////////
+// truncate
+//////////////////////////////////////////////////////////////////////////
+
+typedef struct vfs_overlayfs_truncate_helper
+{
+    uint64_t    size;
+} vfs_overlayfs_truncate_helper_t;
+
+static int _vfs_overlayfs_truncate_inner(vfs_overlayfs_session_t* session, void* data)
+{
+    vfs_overlayfs_truncate_helper_t* helper = data;
+    vfs_operations_t* fs = session->fs;
+
+    if (fs->truncate == NULL)
+    {
+        return VFS_ENOSYS;
+    }
+    return fs->truncate(fs, session->real, helper->size);
+}
+
+static int _vfs_overlayfs_truncate(struct vfs_operations* thiz, uintptr_t fh, uint64_t size)
+{
+    vfs_overlayfs_t* fs = EV_CONTAINER_OF(thiz, vfs_overlayfs_t, op);
+    vfs_overlayfs_truncate_helper_t helper = { size };
+    return _vfs_overlayfs_common_fh(fs, fh, _vfs_overlayfs_truncate_inner, &helper);
 }
 
 //////////////////////////////////////////////////////////////////////////
 // seek
 //////////////////////////////////////////////////////////////////////////
 
-static int64_t _vfs_overlayfs_seek(struct vfs_operations* thiz, uintptr_t fh, int64_t offset, int whence)
+typedef struct vfs_overlayfs_seek_helper
 {
-    vfs_overlayfs_t* fs = EV_CONTAINER_OF(thiz, vfs_overlayfs_t, op);
-    vfs_overlayfs_session_t* session = _vfs_overlayfs_common_find_session(fs, fh);
-    if (session == NULL)
-    {
-        return VFS_EBADF;
-    }
+    int64_t offset;
+    int     whence;
+    int64_t ret;
+} vfs_overlayfs_seek_helper_t;
 
-    if (session->fs->seek == NULL)
+static int _vfs_overlayfs_seek_inner(vfs_overlayfs_session_t* session, void* data)
+{
+    vfs_overlayfs_seek_helper_t* helper = data;
+    vfs_operations_t* fs = session->fs;
+
+    if (fs->seek == NULL)
     {
         return VFS_ENOSYS;
     }
 
-    return session->fs->seek(session->fs, session->real, offset, whence);
+    helper->ret = fs->seek(fs, session->real, helper->offset, helper->whence);
+    return 0;
+}
+
+static int64_t _vfs_overlayfs_seek(struct vfs_operations* thiz, uintptr_t fh, int64_t offset, int whence)
+{
+    int ret;
+    vfs_overlayfs_t* fs = EV_CONTAINER_OF(thiz, vfs_overlayfs_t, op);
+
+    vfs_overlayfs_seek_helper_t helper = { offset, whence, 0 };
+    ret = _vfs_overlayfs_common_fh(fs, fh, _vfs_overlayfs_seek_inner, &helper);
+    if (ret != 0)
+    {
+        return ret;
+    }
+    return helper.ret;
 }
 
 //////////////////////////////////////////////////////////////////////////
 // read
 //////////////////////////////////////////////////////////////////////////
 
-static int _vfs_overlayfs_read(struct vfs_operations* thiz, uintptr_t fh, void* buf, size_t len)
+typedef struct vfs_overlayfs_read_helper
 {
-    vfs_overlayfs_t* fs = EV_CONTAINER_OF(thiz, vfs_overlayfs_t, op);
-    vfs_overlayfs_session_t* session = _vfs_overlayfs_common_find_session(fs, fh);
-    if (session == NULL)
-    {
-        return VFS_EBADF;
-    }
+    void*   buf;
+    size_t  len;
+} vfs_overlayfs_read_helper_t;
 
-    if (session->fs->read == NULL)
+static int _vfs_overlayfs_read_inner(vfs_overlayfs_session_t* session, void* data)
+{
+    vfs_overlayfs_read_helper_t* helper = data;
+    vfs_operations_t* fs = session->fs;
+
+    if (fs->read == NULL)
     {
         return VFS_ENOSYS;
     }
+    return fs->read(fs, session->real, helper->buf, helper->len);
+}
 
-    return session->fs->read(session->fs, session->real, buf, len);
+static int _vfs_overlayfs_read(struct vfs_operations* thiz, uintptr_t fh, void* buf, size_t len)
+{
+    vfs_overlayfs_t* fs = EV_CONTAINER_OF(thiz, vfs_overlayfs_t, op);
+    vfs_overlayfs_read_helper_t helper = { buf, len };
+    return _vfs_overlayfs_common_fh(fs, fh, _vfs_overlayfs_read_inner, &helper);
 }
 
 //////////////////////////////////////////////////////////////////////////
 // write
 //////////////////////////////////////////////////////////////////////////
 
-static int _vfs_overlayfs_write(struct vfs_operations* thiz, uintptr_t fh, const void* buf, size_t len)
+typedef struct vfs_overlayfs_write_helper
 {
-    vfs_overlayfs_t* fs = EV_CONTAINER_OF(thiz, vfs_overlayfs_t, op);
-    vfs_overlayfs_session_t* session = _vfs_overlayfs_common_find_session(fs, fh);
-    if (session == NULL)
-    {
-        return VFS_EBADF;
-    }
+    const void* buf;
+    size_t      len;
+} vfs_overlayfs_write_helper_t;
 
-    if (session->fs->write == NULL)
+static int _vfs_overlayfs_write_inner(vfs_overlayfs_session_t* session, void* data)
+{
+    vfs_overlayfs_write_helper_t* helper = data;
+    vfs_operations_t* fs = session->fs;
+
+    if (fs->write == NULL)
     {
         return VFS_ENOSYS;
     }
+    return fs->write(fs, session->real, helper->buf, helper->len);
+}
 
-    return session->fs->write(session->fs, session->real, buf, len);
+static int _vfs_overlayfs_write(struct vfs_operations* thiz, uintptr_t fh, const void* buf, size_t len)
+{
+    vfs_overlayfs_t* fs = EV_CONTAINER_OF(thiz, vfs_overlayfs_t, op);
+    vfs_overlayfs_write_helper_t helper = { buf, len };
+    return _vfs_overlayfs_common_fh(fs, fh, _vfs_overlayfs_write_inner, &helper);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -1071,29 +1202,31 @@ static int _vfs_overlayfs_unlink(struct vfs_operations* thiz, const char* path)
 int vfs_make_overlay(vfs_operations_t** fs, vfs_operations_t* lower,
     vfs_operations_t* upper)
 {
-    vfs_overlayfs_t* newfs = calloc(1, sizeof(vfs_overlayfs_t));
-    if (newfs == NULL)
+    vfs_overlayfs_t* overlayfs = calloc(1, sizeof(vfs_overlayfs_t));
+    if (overlayfs == NULL)
     {
         return VFS_ENOMEM;
     }
 
-    newfs->lower = lower;
-    newfs->upper = upper;
+    overlayfs->lower = lower;
+    overlayfs->upper = upper;
 
-    newfs->op.destroy = _vfs_overlayfs_destroy;
-    newfs->op.ls = _vfs_overlayfs_ls;
-    newfs->op.stat = _vfs_overlayfs_stat;
-    newfs->op.open = _vfs_overlayfs_open;
-    newfs->op.close = _vfs_overlayfs_close;
-    newfs->op.seek = _vfs_overlayfs_seek;
-    newfs->op.read = _vfs_overlayfs_read;
-    newfs->op.write = _vfs_overlayfs_write;
-    newfs->op.mkdir = _vfs_overlayfs_mkdir;
-    newfs->op.rmdir = _vfs_overlayfs_rmdir;
-    newfs->op.unlink = _vfs_overlayfs_unlink;
+    overlayfs->op.destroy = _vfs_overlayfs_destroy;
+    overlayfs->op.ls = _vfs_overlayfs_ls;
+    overlayfs->op.stat = _vfs_overlayfs_stat;
+    overlayfs->op.open = _vfs_overlayfs_open;
+    overlayfs->op.close = _vfs_overlayfs_close;
+    overlayfs->op.truncate = _vfs_overlayfs_truncate;
+    overlayfs->op.seek = _vfs_overlayfs_seek;
+    overlayfs->op.read = _vfs_overlayfs_read;
+    overlayfs->op.write = _vfs_overlayfs_write;
+    overlayfs->op.mkdir = _vfs_overlayfs_mkdir;
+    overlayfs->op.rmdir = _vfs_overlayfs_rmdir;
+    overlayfs->op.unlink = _vfs_overlayfs_unlink;
 
-    vfs_map_init(&newfs->session_map, _vfs_overlayfs_cmp_session, NULL);
+    vfs_map_init(&overlayfs->session_map, _vfs_overlayfs_cmp_session, NULL);
+    vfs_mutex_init(&overlayfs->session_map_lock);
 
-    *fs = &newfs->op;
+    *fs = &overlayfs->op;
     return 0;
 }

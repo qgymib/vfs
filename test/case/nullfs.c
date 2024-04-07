@@ -96,3 +96,62 @@ TEST_F(nullfs, seek)
         ASSERT_EQ_INT(vfs->close(vfs, fh), 0);
     }
 }
+
+TEST_F(nullfs, truncate)
+{
+    vfs_operations_t* vfs = vfs_visitor_instance();
+    ASSERT_NE_PTR(vfs, NULL);
+
+    uintptr_t fh = 0;
+    {
+        const char* path = LOCALFS_TEST_MOUNT_PATH "/foo";
+        ASSERT_EQ_INT(vfs->open(vfs, &fh, path, VFS_O_RDWR | VFS_O_CREATE), 0);
+        ASSERT_EQ_INT(vfs->write(vfs, fh, "dummy", 5), 5);
+        ASSERT_EQ_INT64(vfs->seek(vfs, fh, -1, VFS_SEEK_END), 0);
+        ASSERT_EQ_INT(vfs->truncate(vfs, fh, 1), 0);
+        ASSERT_EQ_INT(vfs->close(vfs, fh), 0);
+    }
+}
+
+TEST_F(nullfs, read)
+{
+    vfs_operations_t* vfs = vfs_visitor_instance();
+    ASSERT_NE_PTR(vfs, NULL);
+
+    uintptr_t fh = 0;
+    {
+        const char* path = LOCALFS_TEST_MOUNT_PATH "/foo";
+        ASSERT_EQ_INT(vfs->open(vfs, &fh, path, VFS_O_RDWR | VFS_O_CREATE), 0);
+
+        char buffer[1024];
+        ASSERT_EQ_INT(vfs->read(vfs, fh, buffer, sizeof(buffer)), sizeof(buffer));
+        ASSERT_EQ_INT(vfs->close(vfs, fh), 0);
+    }
+}
+
+TEST_F(nullfs, rmdir)
+{
+    vfs_operations_t* vfs = vfs_visitor_instance();
+    ASSERT_NE_PTR(vfs, NULL);
+
+    const char* path = LOCALFS_TEST_MOUNT_PATH "/foo";
+    ASSERT_EQ_INT(vfs->rmdir(vfs, path), VFS_ENOENT);
+}
+
+TEST_F(nullfs, unlink)
+{
+    vfs_operations_t* vfs = vfs_visitor_instance();
+    ASSERT_NE_PTR(vfs, NULL);
+
+    const char* path = LOCALFS_TEST_MOUNT_PATH "/foo";
+    ASSERT_EQ_INT(vfs->unlink(vfs, path), VFS_ENOENT);
+}
+
+TEST_F(nullfs, mkdir)
+{
+    vfs_operations_t* vfs = vfs_visitor_instance();
+    ASSERT_NE_PTR(vfs, NULL);
+
+    const char* path = LOCALFS_TEST_MOUNT_PATH "/foo";
+    ASSERT_EQ_INT(vfs->mkdir(vfs, path), 0);
+}

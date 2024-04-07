@@ -286,6 +286,35 @@ static int _vfs_visitor_close(struct vfs_operations* thiz, uintptr_t fh)
 }
 
 //////////////////////////////////////////////////////////////////////////
+// truncate
+//////////////////////////////////////////////////////////////////////////
+
+typedef struct vfs_visitor_truncate_helper
+{
+    uint64_t    size;
+} vfs_visitor_truncate_helper_t;
+
+static int _vfs_visitor_truncate_inner(vfs_session_t* session, void* data)
+{
+    vfs_visitor_truncate_helper_t* helper = data;
+    vfs_operations_t* op = session->mount->op;
+    if (op->truncate == NULL)
+    {
+        return VFS_ENOSYS;
+    }
+
+    return op->truncate(op, session->real, helper->size);
+}
+
+static int _vfs_visitor_truncate(struct vfs_operations* thiz, uintptr_t fh, uint64_t size)
+{
+    vfs_visitor_t* visitor = EV_CONTAINER_OF(thiz, vfs_visitor_t, op);
+
+    vfs_visitor_truncate_helper_t helper = { size };
+    return _vfs_visitor_fh(visitor, fh, _vfs_visitor_truncate_inner, &helper);
+}
+
+//////////////////////////////////////////////////////////////////////////
 // seek
 //////////////////////////////////////////////////////////////////////////
 
@@ -465,6 +494,7 @@ vfs_operations_t* vfs_create_visitor(void)
     visitor->op.stat = _vfs_visitor_stat;
     visitor->op.open = _vfs_visitor_open;
     visitor->op.close = _vfs_visitor_close;
+    visitor->op.truncate = _vfs_visitor_truncate;
     visitor->op.seek = _vfs_visitor_seek;
     visitor->op.read = _vfs_visitor_read;
     visitor->op.write = _vfs_visitor_write;

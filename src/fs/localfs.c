@@ -226,6 +226,29 @@ static int _vfs_localfs_close(struct vfs_operations* thiz, uintptr_t fh)
     return 0;
 }
 
+static int _vfs_localfs_truncate(struct vfs_operations* thiz, uintptr_t fh, uint64_t size)
+{
+    (void)thiz;
+    HANDLE file_handle = (HANDLE)fh;
+
+    LARGE_INTEGER cur_pos;
+    cur_pos.QuadPart = 0;
+    cur_pos.LowPart = SetFilePointer(file_handle, 0, &cur_pos.HighPart, FILE_CURRENT);
+
+    LARGE_INTEGER dst_pos;
+    dst_pos.QuadPart = size;
+    SetFilePointer(file_handle, dst_pos.LowPart, &dst_pos.HighPart, FILE_BEGIN);
+
+    if (!SetEndOfFile(file_handle))
+    {
+        int errcode = GetLastError();
+        return vfs_translate_sys_err(errcode);
+    }
+
+    SetFilePointer(file_handle, cur_pos.LowPart, &cur_pos.HighPart, FILE_BEGIN);
+    return 0;
+}
+
 static int _vfs_localfs_read(struct vfs_operations* thiz, uintptr_t fh, void* buf, size_t len)
 {
     (void)thiz;
@@ -466,6 +489,20 @@ static int _vfs_localfs_close(struct vfs_operations* thiz, uintptr_t fh)
     (void)thiz;
     int fd = fh;
     close(fd);
+    return 0;
+}
+
+static int _vfs_localfs_truncate(struct vfs_operations* thiz, uintptr_t fh, uint64_t size)
+{
+    (void)thiz;
+    int fd = fh;
+
+    if (ftruncate(fd, size) < 0)
+    {
+        int errcode = errno;
+        return vfs_translate_sys_err(errcode);
+    }
+
     return 0;
 }
 
@@ -754,6 +791,7 @@ static int _vfs_make_root(vfs_operations_t** fs, const vfs_str_t* root)
     newfs->op.stat = _vfs_localfs_stat;
     newfs->op.open = _vfs_localfs_open;
     newfs->op.close = _vfs_localfs_close;
+    newfs->op.truncate = _vfs_localfs_truncate;
     newfs->op.seek = _vfs_localfs_seek;
     newfs->op.read = _vfs_localfs_read;
     newfs->op.write = _vfs_localfs_write;

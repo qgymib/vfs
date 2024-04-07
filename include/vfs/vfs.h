@@ -116,6 +116,23 @@ typedef struct vfs_operations
     int (*close)(struct vfs_operations* thiz, uintptr_t fh);
 
     /**
+     * @brief (Optional) Truncate file to \p size bytes.
+     *
+     * If the file previously was larger than this size, the extra data is lost.
+     * If the file previously was shorter, it is extended, and the extended part
+     * reads as null bytes ('\0').
+     *
+     * @note The file offset is not changed.
+     * @note The file must open for writing.
+     * @param[in] thiz - This object.
+     * @param[in] fh - File handle.
+     * @param[in] size - New file size in bytes.
+     * @return - 0: on success.
+     * @return - -errno: on error.
+     */
+    int (*truncate)(struct vfs_operations* thiz, uintptr_t fh, uint64_t size);
+
+    /**
      * @brief (Optional) Set the file position indicator for the stream pointed
      *   to by \p fh.
      * @param[in] thiz - This object.

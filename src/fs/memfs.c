@@ -111,7 +111,7 @@ static void _vfs_memfs_common_remove_node_from_parent(vfs_memfs_node_t* node)
 
                 memmove(dst_pos, src_pos, move_sz);
             }
-            
+
             parent->data.dir.children_sz--;
 
             break;
@@ -681,6 +681,56 @@ static int _vfs_memfs_close(struct vfs_operations* thiz, uintptr_t fh)
 }
 
 //////////////////////////////////////////////////////////////////////////
+// truncate
+//////////////////////////////////////////////////////////////////////////
+
+typedef struct vfs_memfs_truncate_helper
+{
+    uint64_t    size;
+} vfs_memfs_truncate_helper_t;
+
+static int _vfs_memfs_truncate_job(vfs_memfs_node_t* node, size_t size)
+{
+    uint8_t* new_data = realloc(node->data.reg.data, size);
+    if (new_data == NULL)
+    {
+        return VFS_ENOMEM;
+    }
+    node->data.reg.data = new_data;
+
+    /* zero content. */
+    if (node->data.reg.size < size)
+    {
+        memset(node->data.reg.data + node->data.reg.size, 0, size - node->data.reg.size);
+    }
+    node->data.reg.size = size;
+
+    return 0;
+}
+
+static int _vfs_memfs_truncate_inner(vfs_memfs_session_t* session, void* data)
+{
+    vfs_memfs_truncate_helper_t* helper = data;
+    vfs_memfs_node_t* node = session->data.node;
+
+    int ret;
+    vfs_rwlock_wrlock(&node->rwlock);
+    {
+        ret = _vfs_memfs_truncate_job(node, helper->size);
+    }
+    vfs_rwlock_wrunlock(&node->rwlock);
+
+    return ret;
+}
+
+static int _vfs_memfs_truncate(struct vfs_operations* thiz, uintptr_t fh, uint64_t size)
+{
+    vfs_memfs_t* fs = EV_CONTAINER_OF(thiz, vfs_memfs_t, op);
+    vfs_memfs_truncate_helper_t helper = { size };
+    return _vfs_memfs_common_op_fh(fs, fh, _vfs_memfs_truncate_inner, &helper);
+}
+
+//////////////////////////////////////////////////////////////////////////
 // seek
 //////////////////////////////////////////////////////////////////////////
 
@@ -961,6 +1011,7 @@ int vfs_make_memory(vfs_operations_t** fs)
     memfs->op.stat = _vfs_memfs_stat;
     memfs->op.open = _vfs_memfs_open;
     memfs->op.close = _vfs_memfs_close;
+    memfs->op.truncate = _vfs_memfs_truncate;
     memfs->op.seek = _vfs_memfs_seek;
     memfs->op.read = _vfs_memfs_read;
     memfs->op.write = _vfs_memfs_write;

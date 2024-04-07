@@ -202,6 +202,30 @@ static int _vfs_nullfs_close(struct vfs_operations* thiz, uintptr_t fh)
 }
 
 //////////////////////////////////////////////////////////////////////////
+// truncate
+//////////////////////////////////////////////////////////////////////////
+
+typedef struct vfs_nullfs_truncate_helper
+{
+    uint64_t    size;
+} vfs_nullfs_truncate_helper_t;
+
+static int _vfs_nullfs_truncate_inner(vfs_nullfs_session_t* session, void* data)
+{
+    vfs_nullfs_truncate_helper_t* helper = data;
+    (void)session; (void)helper;
+
+    return 0;
+}
+
+static int _vfs_nullfs_truncate(struct vfs_operations* thiz, uintptr_t fh, uint64_t size)
+{
+    vfs_nullfs_t* fs = EV_CONTAINER_OF(thiz, vfs_nullfs_t, op);
+    vfs_nullfs_truncate_helper_t helper = { size };
+    return _vfs_nullfs_common_fh(fs, fh, _vfs_nullfs_truncate_inner, &helper);
+}
+
+//////////////////////////////////////////////////////////////////////////
 // seek
 //////////////////////////////////////////////////////////////////////////
 
@@ -371,6 +395,7 @@ int vfs_make_null(vfs_operations_t** fs)
     nullfs->op.stat = _vfs_nullfs_stat;
     nullfs->op.open = _vfs_nullfs_open;
     nullfs->op.close = _vfs_nullfs_close;
+    nullfs->op.truncate = _vfs_nullfs_truncate;
     nullfs->op.seek = _vfs_nullfs_seek;
     nullfs->op.read = _vfs_nullfs_read;
     nullfs->op.write = _vfs_nullfs_write;
