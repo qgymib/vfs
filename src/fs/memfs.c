@@ -20,7 +20,6 @@ typedef struct vfs_memfs_node_dir
 typedef struct vfs_memfs_node_reg
 {
     uint8_t*                    data;               /**< File content. '\0' terminal is always appended. */
-    uint64_t                    size;               /**< Content size in bytes, not including terminal '\0'. */
 } vfs_memfs_node_reg_t;
 
 typedef struct vfs_memfs_node
@@ -162,7 +161,7 @@ static void _vfs_memfs_common_release_node(vfs_memfs_node_t* node, int unlink)
     {
         free(node->data.reg.data);
         node->data.reg.data = NULL;
-        node->data.reg.size = 0;
+        node->stat.st_size = 0;
     }
 
     vfs_str_exit(&node->name);
@@ -225,7 +224,8 @@ static int _vfs_memfs_common_op_path(vfs_memfs_t* fs, const vfs_str_t* path,
 
         if (child == NULL)
         {
-            return VFS_ENOENT;
+            ret = VFS_ENOENT;
+            goto finish;
         }
         parent = child;
     }
@@ -233,8 +233,8 @@ static int _vfs_memfs_common_op_path(vfs_memfs_t* fs, const vfs_str_t* path,
 do_cb:
     ret = cb(parent, data);
     _vfs_memfs_common_release_node(parent, 0);
+finish:
     vfs_strlist_exit(&path_list);
-
     return ret;
 }
 
@@ -341,49 +341,6 @@ static int _vfs_memfs_common_op_fh(vfs_memfs_t* fs, uintptr_t fh,
 
     int ret = cb(session, data);
     _vfs_memfs_common_release_session(session);
-
-    return ret;
-}
-
-static int _vfs_memfs_common_delete_inner(vfs_memfs_node_t* node, void* data)
-{
-    vfs_memfs_delete_helper_t* helper = data;
-
-    /* The reference count has been increased. */
-    vfs_memfs_node_t* child = _vfs_memfs_common_search_for(node, helper->basename);
-    if (child == NULL)
-    {
-        return VFS_ENOENT;
-    }
-
-    /* We cannot delete the wrong type. */
-    if (!(child->stat.st_mode & helper->type))
-    {
-        _vfs_memfs_common_release_node(child, 1);
-        return VFS_ENOTDIR;
-    }
-    /* Now we are ready to delete the node. */
-
-    /* The first time to release reference increased by #_vfs_memfs_common_search_for(). */
-    _vfs_memfs_common_release_node(child, 1);
-    /* The second time to release reference to actually delete it. */
-    _vfs_memfs_common_release_node(child, 1);
-
-    return 0;
-}
-
-static int _vfs_memfs_common_delete(vfs_memfs_t* fs, const vfs_str_t* path,
-    vfs_stat_flag_t type)
-{
-    int ret;
-    vfs_str_t basename = VFS_STR_INIT;
-    vfs_str_t parent = vfs_path_parent(path, &basename);
-    {
-        vfs_memfs_delete_helper_t helper = { &basename, type };
-        ret = _vfs_memfs_common_op_path(fs, &parent, _vfs_memfs_common_delete_inner, &helper);
-    }
-    vfs_str_exit(&basename);
-    vfs_str_exit(&parent);
 
     return ret;
 }
@@ -551,7 +508,7 @@ static int _vfs_memfs_open_exist(vfs_memfs_t* fs, vfs_memfs_node_t* node, uintpt
         {
             buf = node->data.reg.data;
             node->data.reg.data = NULL;
-            node->data.reg.size = 0;
+            node->stat.st_size = 0;
         }
         vfs_rwlock_wrunlock(&node->rwlock);
         free(buf);
@@ -699,11 +656,11 @@ static int _vfs_memfs_truncate_job(vfs_memfs_node_t* node, size_t size)
     node->data.reg.data = new_data;
 
     /* zero content. */
-    if (node->data.reg.size < size)
+    if (node->stat.st_size < size)
     {
-        memset(node->data.reg.data + node->data.reg.size, 0, size - node->data.reg.size);
+        memset(node->data.reg.data + node->stat.st_size, 0, size - node->stat.st_size);
     }
-    node->data.reg.size = size;
+    node->stat.st_size = size;
 
     return 0;
 }
@@ -738,6 +695,7 @@ typedef struct vfs_memfs_seek_helper
 {
     int64_t offset;
     int     whence;
+    int64_t ret;
 } vfs_memfs_seek_helper_t;
 
 static int _vfs_memfs_seek_inner(vfs_memfs_session_t* session, void* data)
@@ -750,6 +708,7 @@ static int _vfs_memfs_seek_inner(vfs_memfs_session_t* session, void* data)
         vfs_mutex_enter(&session->mutex);
         {
             session->data.fpos = helper->offset;
+            helper->ret = session->data.fpos;
         }
         vfs_mutex_leave(&session->mutex);
         return 0;
@@ -764,6 +723,7 @@ static int _vfs_memfs_seek_inner(vfs_memfs_session_t* session, void* data)
         vfs_mutex_enter(&session->mutex);
         {
             session->data.fpos += helper->offset;
+            helper->ret = session->data.fpos;
         }
         vfs_mutex_leave(&session->mutex);
         return 0;
@@ -776,6 +736,7 @@ static int _vfs_memfs_seek_inner(vfs_memfs_session_t* session, void* data)
         vfs_mutex_enter(&session->mutex);
         {
             session->data.fpos = UINT64_MAX;
+            helper->ret = node->stat.st_size;
         }
         vfs_mutex_leave(&session->mutex);
         return 0;
@@ -786,7 +747,8 @@ handle_seek_end:
     vfs_mutex_enter(&session->mutex);
     vfs_rwlock_rdlock(&node->rwlock);
     {
-        session->data.fpos = node->data.reg.size + helper->offset;
+        session->data.fpos = node->stat.st_size + helper->offset;
+        helper->ret = session->data.fpos;
     }
     vfs_rwlock_rdunlock(&node->rwlock);
     vfs_mutex_leave(&session->mutex);
@@ -798,8 +760,13 @@ static int64_t _vfs_memfs_seek(struct vfs_operations* thiz, uintptr_t fh, int64_
 {
     vfs_memfs_t* fs = EV_CONTAINER_OF(thiz, vfs_memfs_t, op);
 
-    vfs_memfs_seek_helper_t helper = { offset, whence };
-    return _vfs_memfs_common_op_fh(fs, fh, _vfs_memfs_seek_inner, &helper);
+    vfs_memfs_seek_helper_t helper = { offset, whence, 0 };
+    int ret = _vfs_memfs_common_op_fh(fs, fh, _vfs_memfs_seek_inner, &helper);
+    if (ret != 0)
+    {
+        return ret;
+    }
+    return helper.ret;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -822,15 +789,15 @@ static int _vfs_memfs_read_inner(vfs_memfs_session_t* session, void* data)
     vfs_rwlock_rdlock(&node->rwlock);
     do 
     {
-        if (session->data.fpos >= node->data.reg.size)
+        if (session->data.fpos >= node->stat.st_size)
         {
             ret = VFS_EOF;
             break;
         }
 
-        size_t left_sz = node->data.reg.size - session->data.fpos;
+        size_t left_sz = node->stat.st_size - session->data.fpos;
         ret = (int)min(left_sz, helper->len);
-        memcpy(helper->buf, node->data.reg.data, ret);
+        memcpy(helper->buf, node->data.reg.data + session->data.fpos, ret);
         session->data.fpos += ret;
     } while (0);
     vfs_rwlock_rdunlock(&node->rwlock);
@@ -858,7 +825,7 @@ typedef struct vfs_memfs_write_helper
 
 static int _vfs_memfs_write_append(vfs_memfs_node_t* node, const void* buf, size_t len)
 {
-    size_t old_sz = node->data.reg.size;
+    size_t old_sz = node->stat.st_size;
     size_t new_sz = old_sz + len;
     uint8_t* new_buf = realloc(node->data.reg.data, new_sz + 1);
     if (new_buf == NULL)
@@ -866,7 +833,7 @@ static int _vfs_memfs_write_append(vfs_memfs_node_t* node, const void* buf, size
         return VFS_ENOMEM;
     }
     node->data.reg.data = new_buf;
-    node->data.reg.size = new_sz;
+    node->stat.st_size = new_sz;
     memcpy(node->data.reg.data + old_sz, buf, len);
     node->data.reg.data[new_sz] = '\0';
 
@@ -875,7 +842,7 @@ static int _vfs_memfs_write_append(vfs_memfs_node_t* node, const void* buf, size
 
 static int _vfs_memfs_write_pos(vfs_memfs_session_t* session, vfs_memfs_node_t* node, const void* buf, size_t len)
 {
-    if (session->data.fpos + len < node->data.reg.size)
+    if (session->data.fpos + len < node->stat.st_size)
     {
         memcpy(node->data.reg.data + session->data.fpos, buf, len);
         session->data.fpos += len;
@@ -890,13 +857,13 @@ static int _vfs_memfs_write_pos(vfs_memfs_session_t* session, vfs_memfs_node_t* 
     }
     node->data.reg.data = new_buf;
 
-    if (session->data.fpos >= node->data.reg.size)
+    if (session->data.fpos >= node->stat.st_size)
     {
-        memset(node->data.reg.data + node->data.reg.size, 0, session->data.fpos - node->data.reg.size);
+        memset(node->data.reg.data + node->stat.st_size, 0, session->data.fpos - node->stat.st_size);
     }
     memcpy(new_buf + session->data.fpos, buf, len);
-    node->data.reg.size = new_sz;
-    node->data.reg.data[node->data.reg.size] = '\0';
+    node->stat.st_size = new_sz;
+    node->data.reg.data[node->stat.st_size] = '\0';
     
     session->data.fpos += len;
     return (int)len;
@@ -976,22 +943,98 @@ static int _vfs_memfs_mkdir(struct vfs_operations* thiz, const char* path)
 // rmdir
 //////////////////////////////////////////////////////////////////////////
 
+static int _vfs_memfs_rmdir_inner(vfs_memfs_node_t* node, void* data)
+{
+    vfs_str_t* basename = data;
+
+    /* The reference count has been increased. */
+    vfs_memfs_node_t* child = _vfs_memfs_common_search_for(node, basename);
+    if (child == NULL)
+    {
+        return VFS_ENOENT;
+    }
+
+    if (!(child->stat.st_mode & VFS_S_IFDIR))
+    {
+        _vfs_memfs_common_release_node(child, 0);
+        return VFS_ENOTDIR;
+    }
+
+    if (child->data.dir.children_sz != 0)
+    {
+        _vfs_memfs_common_release_node(child, 0);
+        return VFS_ENOTEMPTY;
+    }
+
+    /* The first time to release reference increased by #_vfs_memfs_common_search_for(). */
+    _vfs_memfs_common_release_node(child, 0);
+    /* The second time to release reference to actually delete it. */
+    _vfs_memfs_common_release_node(child, 1);
+
+    return 0;
+}
+
 static int _vfs_memfs_rmdir(struct vfs_operations* thiz, const char* path)
 {
+    int ret;
     vfs_memfs_t* fs = EV_CONTAINER_OF(thiz, vfs_memfs_t, op);
     vfs_str_t path_str = vfs_str_from_static1(path);
-    return _vfs_memfs_common_delete(fs, &path_str, VFS_S_IFDIR);
+
+    vfs_str_t basename = VFS_STR_INIT;
+    vfs_str_t parent = vfs_path_parent(&path_str, &basename);
+    {
+        ret = _vfs_memfs_common_op_path(fs, &parent, _vfs_memfs_rmdir_inner, &basename);
+    }
+    vfs_str_exit(&basename);
+    vfs_str_exit(&parent);
+
+    return ret;
 }
 
 //////////////////////////////////////////////////////////////////////////
 // unlink
 //////////////////////////////////////////////////////////////////////////
 
+static int _vfs_memfs_unlink_inner(vfs_memfs_node_t* node, void* data)
+{
+    vfs_str_t* basename = data;
+
+    /* The reference count has been increased. */
+    vfs_memfs_node_t* child = _vfs_memfs_common_search_for(node, basename);
+    if (child == NULL)
+    {
+        return VFS_ENOENT;
+    }
+
+    if (!(child->stat.st_mode & VFS_S_IFREG))
+    {
+        _vfs_memfs_common_release_node(child, 0);
+        return VFS_EISDIR;
+    }
+
+    /* The first time to release reference increased by #_vfs_memfs_common_search_for(). */
+    _vfs_memfs_common_release_node(child, 0);
+    /* The second time to release reference to actually delete it. */
+    _vfs_memfs_common_release_node(child, 1);
+
+    return 0;
+}
+
 static int _vfs_memfs_unlink(struct vfs_operations* thiz, const char* path)
 {
+    int ret;
     vfs_memfs_t* fs = EV_CONTAINER_OF(thiz, vfs_memfs_t, op);
     vfs_str_t path_str = vfs_str_from_static1(path);
-    return _vfs_memfs_common_delete(fs, &path_str, VFS_S_IFREG);
+
+    vfs_str_t basename = VFS_STR_INIT;
+    vfs_str_t parent = vfs_path_parent(&path_str, &basename);
+    {
+        ret = _vfs_memfs_common_op_path(fs, &parent, _vfs_memfs_unlink_inner, &basename);
+    }
+    vfs_str_exit(&basename);
+    vfs_str_exit(&parent);
+
+    return ret;
 }
 
 //////////////////////////////////////////////////////////////////////////

@@ -3,7 +3,7 @@ add_executable(vfs_test
     case/localfs.c
     case/localfs_ls.cpp
     case/localfs_mount.c
-    case/memfs_stat.c
+    case/memfs.c
     case/nullfs.c
     case/overlayfs_ls.cpp
     case/overlayfs_mkdir.c
