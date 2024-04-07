@@ -352,6 +352,45 @@ static int _vfs_localfs_mkdir_common(const vfs_str_t* path)
     return 0;
 }
 
+static int _vfs_localfs_rmdir_common(const vfs_str_t* path)
+{
+    if (RemoveDirectoryA(path->str))
+    {
+        return 0;
+    }
+
+    int ret = GetLastError();
+    ret = vfs_translate_sys_err(ret);
+
+    return ret;
+}
+
+static int _vfs_localfs_unlink_common(const vfs_str_t* path)
+{
+    if (DeleteFileA(path->str))
+    {
+        return 0;
+    }
+
+    /* First backup the error code. */
+    int ret = GetLastError();
+    ret = vfs_translate_sys_err(ret);
+
+    if (ret == VFS_EACCES)
+    {
+        struct _stat statbuf;
+        if (_stat(path->str, &statbuf) == 0)
+        {
+            if ((statbuf.st_mode & S_IFMT) == S_IFDIR)
+            {
+                ret = VFS_EISDIR;
+            }
+        }
+    }
+
+    return ret;
+}
+
 #else
 
 #include <sys/types.h>
@@ -580,6 +619,32 @@ static int _vfs_localfs_mkdir_common(const vfs_str_t* path)
     return 0;
 }
 
+static int _vfs_localfs_rmdir_common(const vfs_str_t* path)
+{
+    if (rmdir(path->str) == 0)
+    {
+        return 0;
+    }
+
+    int ret = errno;
+    ret = vfs_translate_sys_err(ret);
+
+    return ret;
+}
+
+static int _vfs_localfs_unlink_common(const vfs_str_t* path)
+{
+    if (unlink(path->str) == 0)
+    {
+        return 0;
+    }
+
+    int ret = errno;
+    ret = vfs_translate_sys_err(ret);
+
+    return ret;
+}
+
 #endif
 
 static void _vfs_local_destroy(struct vfs_operations* thiz)
@@ -684,19 +749,6 @@ static int _vfs_localfs_mkdir(struct vfs_operations* thiz, const char* path)
     return ret;
 }
 
-static int _vfs_localfs_rmdir_common(const vfs_str_t* path)
-{
-    if (rmdir(path->str) == 0)
-    {
-        return 0;
-    }
-
-    int ret = errno;
-    ret = vfs_translate_sys_err(ret);
-
-    return ret;
-}
-
 static int _vfs_localfs_rmdir(struct vfs_operations* thiz, const char* path)
 {
     int ret;
@@ -707,19 +759,6 @@ static int _vfs_localfs_rmdir(struct vfs_operations* thiz, const char* path)
         ret = _vfs_localfs_rmdir_common(&actual_path);
     }
     vfs_str_exit(&actual_path);
-
-    return ret;
-}
-
-static int _vfs_localfs_unlink_common(const vfs_str_t* path)
-{
-    if (unlink(path->str) == 0)
-    {
-        return 0;
-    }
-
-    int ret = errno;
-    ret = vfs_translate_sys_err(ret);
 
     return ret;
 }

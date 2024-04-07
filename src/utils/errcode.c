@@ -19,7 +19,7 @@
     xx(ENOTEMPTY)   \
     xx(EALREADY)
 
-static int _vfs_map_native_error_to_vfs(int errcode)
+int vfs_translate_posix_error(int errcode)
 {
 #define EXPAND_ERR_MAP_AS_TABLE(xx) case xx: return VFS_##xx;
 
@@ -47,23 +47,26 @@ int vfs_translate_sys_err(int errcode)
 {
     switch (errcode)
     {
-    case ERROR_FILE_EXISTS:         return -EALREADY;
-    case ERROR_ALREADY_EXISTS:      return -EALREADY;
     case ERROR_FILE_NOT_FOUND:      return VFS_ENOENT;
+    case ERROR_PATH_NOT_FOUND:      return VFS_ENOENT;
+    case ERROR_ACCESS_DENIED:       return VFS_EACCES;
     case ERROR_SHARING_VIOLATION:   return VFS_EACCES;
-
+    case ERROR_FILE_EXISTS:         return VFS_EALREADY;
+    case ERROR_DIR_NOT_EMPTY:       return VFS_ENOTEMPTY;
+    case ERROR_ALREADY_EXISTS:      return VFS_EALREADY;
+    case ERROR_DIRECTORY:           return VFS_ENOTDIR;
     default:
         break;
     }
 
-    return _vfs_map_native_error_to_vfs(errcode);
+    return vfs_translate_posix_error(errcode);
 }
 
 #else
 
 int vfs_translate_sys_err(int errcode)
 {
-    return _vfs_map_native_error_to_vfs(errcode);
+    return vfs_translate_posix_error(errcode);
 }
 
 #endif
