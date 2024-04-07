@@ -15,6 +15,7 @@ add_executable(vfs_test
     case/overlayfs_read.c
     case/overlayfs_rmdir.c
     case/overlayfs_stat.c
+    case/overlayfs_truncate.c
     case/overlayfs_unlink.c
     case/overlayfs_write.c
     utils/cwdpath.c

@@ -701,6 +701,11 @@ static int _vfs_overlayfs_open_copy_to_upper(vfs_overlayfs_t* fs, const vfs_str_
         return VFS_ENOSYS;
     }
 
+    if ((ret = vfs_path_ensure_parent_exist(fs->upper, path)) != 0)
+    {
+        return ret;
+    }
+
     uintptr_t fh_lower = 0;
     if ((ret = fs->lower->open(fs->lower, &fh_lower, path->str, VFS_O_RDONLY)) != 0)
     {

@@ -167,20 +167,11 @@ static DWORD _vfs_win_flags_to_desired_access(uint64_t flags)
 
 static DWORD _vfs_win_flags_to_creation_disposition(uint64_t flags)
 {
-    int ret = 0;
     if (flags & VFS_O_CREATE)
     {
-        ret |= OPEN_ALWAYS;
+        return OPEN_ALWAYS;
     }
-    else
-    {
-        ret |= OPEN_EXISTING;
-    }
-    if (flags & VFS_O_TRUNCATE)
-    {
-        ret |= TRUNCATE_EXISTING;
-    }
-    return ret;
+    return OPEN_EXISTING;
 }
 
 static DWORD _vfs_win_flags_to_share_mode(uint64_t flags)
@@ -197,6 +188,26 @@ static DWORD _vfs_win_flags_to_share_mode(uint64_t flags)
     return ret;
 }
 
+static int _vfs_localfs_truncate_win32(HANDLE file, uint64_t size)
+{
+    LARGE_INTEGER cur_pos;
+    cur_pos.QuadPart = 0;
+    cur_pos.LowPart = SetFilePointer(file, 0, &cur_pos.HighPart, FILE_CURRENT);
+
+    LARGE_INTEGER dst_pos;
+    dst_pos.QuadPart = size;
+    SetFilePointer(file, dst_pos.LowPart, &dst_pos.HighPart, FILE_BEGIN);
+
+    if (!SetEndOfFile(file))
+    {
+        int errcode = GetLastError();
+        return vfs_translate_sys_err(errcode);
+    }
+
+    SetFilePointer(file, cur_pos.LowPart, &cur_pos.HighPart, FILE_BEGIN);
+    return 0;
+}
+
 static int _vfs_localfs_open_common(uintptr_t* fh, const vfs_str_t* path, uint64_t flags)
 {
     int ret = 0;
@@ -210,6 +221,15 @@ static int _vfs_localfs_open_common(uintptr_t* fh, const vfs_str_t* path, uint64
         DWORD errcode = GetLastError();
         ret = vfs_translate_sys_err(errcode);
         goto finish;
+    }
+
+    if (flags & VFS_O_TRUNCATE)
+    {
+        if ((ret = _vfs_localfs_truncate_win32(fileHandle, 0)) != 0)
+        {
+            CloseHandle(fileHandle);
+            goto finish;
+        }
     }
 
     *fh = (uintptr_t)fileHandle;
@@ -231,22 +251,7 @@ static int _vfs_localfs_truncate(struct vfs_operations* thiz, uintptr_t fh, uint
     (void)thiz;
     HANDLE file_handle = (HANDLE)fh;
 
-    LARGE_INTEGER cur_pos;
-    cur_pos.QuadPart = 0;
-    cur_pos.LowPart = SetFilePointer(file_handle, 0, &cur_pos.HighPart, FILE_CURRENT);
-
-    LARGE_INTEGER dst_pos;
-    dst_pos.QuadPart = size;
-    SetFilePointer(file_handle, dst_pos.LowPart, &dst_pos.HighPart, FILE_BEGIN);
-
-    if (!SetEndOfFile(file_handle))
-    {
-        int errcode = GetLastError();
-        return vfs_translate_sys_err(errcode);
-    }
-
-    SetFilePointer(file_handle, cur_pos.LowPart, &cur_pos.HighPart, FILE_BEGIN);
-    return 0;
+    return _vfs_localfs_truncate_win32(file_handle, size);
 }
 
 static int _vfs_localfs_read(struct vfs_operations* thiz, uintptr_t fh, void* buf, size_t len)
