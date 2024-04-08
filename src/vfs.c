@@ -98,6 +98,11 @@ void vfs_exit(void)
 
 int vfs_mount(const char* path, vfs_operations_t* op)
 {
+    if (path == NULL || op == NULL)
+    {
+        return VFS_EINVAL;
+    }
+
     vfs_mount_t* node = malloc(sizeof(vfs_mount_t));
     if (node == NULL)
     {

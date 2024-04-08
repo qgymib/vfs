@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
@@ -58,24 +59,20 @@ static vfs_str_t _vfs_get_relative_path(const vfs_mount_t* node, const vfs_str_t
 
 int vfs_access_mount(const vfs_str_t* path, vfs_path_cb cb, void* data)
 {
+    int ret;
     vfs_mount_t* node = _vfs_fetch_path_and_add_node(path);
     if (node == NULL)
     {
         return -ENOENT;
     }
-
-    int ret;
-    if (node->op == NULL)
-    {
-        ret = -ENOSYS;
-        goto finish;
-    }
+    assert(node->op != NULL);
 
     vfs_str_t relative_path = _vfs_get_relative_path(node, path);
-    ret = cb(node, &relative_path, data);
+    {
+        ret = cb(node, &relative_path, data);
+    }
     vfs_str_exit(&relative_path);
 
-finish:
     vfs_release_mount(node);
     return ret;
 }
