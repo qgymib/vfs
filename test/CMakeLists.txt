@@ -5,6 +5,7 @@ add_executable(vfs_test
     case/localfs_mount.c
     case/memfs.c
     case/nullfs.c
+    case/overlayfs.c
     case/overlayfs_ls.cpp
     case/overlayfs_mkdir.c
     case/overlayfs_read.c
