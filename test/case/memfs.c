@@ -1,6 +1,6 @@
 #include "test.h"
 #include "vfs/fs/memfs.h"
-#include "utils/generic_fs_tester.h"
+#include "generic/__init__.h"
 
 static vfs_operations_t* s_test_memfs_generic = NULL;
 

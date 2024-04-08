@@ -1,6 +1,6 @@
 #include "test.h"
 #include "vfs/fs/overlayfs.h"
-#include "utils/generic_fs_tester.h"
+#include "generic/__init__.h"
 #include "utils/overlayfs_builder.h"
 
 #define TEST_OVERLAY_MOUNT_PATH "file:///test/overlay/"
