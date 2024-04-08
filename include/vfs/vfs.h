@@ -157,6 +157,7 @@ typedef struct vfs_operations
      * @param[out] buf - Buffer to store data.
      * @param[in] size - Buffer size.
      * @return - >=0: Number of bytes read on success.
+     * @return - #VFS_EBADF: Bad file descriptor, or not open for reading.
      * @return - #VFS_EOF: end of file.
      * @return - -errno: error.
      */
@@ -169,6 +170,7 @@ typedef struct vfs_operations
      * @param[in] buf - Buffer containing data.
      * @param[in] size - Size of data.
      * @return - >=0: Number of bytes written on success.
+     * @return - #VFS_EBADF: Bad file descriptor, or not open for writing.
      * @return - -errno: error.
      */
     int (*write)(struct vfs_operations* thiz, uintptr_t fh, const void* buf, size_t len);

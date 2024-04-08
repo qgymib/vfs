@@ -263,6 +263,10 @@ static int _vfs_localfs_read(struct vfs_operations* thiz, uintptr_t fh, void* bu
     if (!ReadFile(file_handle, buf, (DWORD)len, &read_sz, NULL))
     {
         DWORD errcode = GetLastError();
+        if (errcode == ERROR_ACCESS_DENIED)
+        {
+            return VFS_EBADF;
+        }
         return vfs_translate_sys_err(errcode);
     }
 
@@ -283,6 +287,10 @@ static int _vfs_localfs_write(struct vfs_operations* thiz, uintptr_t fh, const v
     if (!WriteFile(file_handle, buf, (DWORD)len, &write_sz, NULL))
     {
         DWORD errcode = GetLastError();
+        if (errcode == ERROR_ACCESS_DENIED)
+        {
+            return VFS_EBADF;
+        }
         return vfs_translate_sys_err(errcode);
     }
 
@@ -576,7 +584,8 @@ static int _vfs_localfs_write(struct vfs_operations* thiz, uintptr_t fh, const v
     ssize_t write_sz = write(fd, buf, len);
     if (write_sz < 0)
     {
-        return vfs_translate_sys_err(errno);
+        int errcode = errno;
+        return vfs_translate_sys_err(errcode);
     }
     return write_sz;
 }

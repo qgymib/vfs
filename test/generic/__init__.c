@@ -5,6 +5,8 @@ static const vfs_test_generic_case_t* s_test_generic_cases[] = {
     &vfs_test_generic_check_root,
     &vfs_test_generic_mkdir_parent_not_exist,
     &vfs_test_generic_mkdir_rmdir_in_root,
+    &vfs_test_generic_open_as_rdonly_and_write,
+    &vfs_test_generic_open_as_wronly_and_read,
     &vfs_test_generic_open_parent_not_exist,
     &vfs_test_generic_open_unlink_in_root,
     &vfs_test_generic_rmdir_non_empty,

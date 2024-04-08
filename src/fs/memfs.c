@@ -785,6 +785,11 @@ static int _vfs_memfs_read_inner(vfs_memfs_session_t* session, void* data)
     vfs_memfs_read_helper_t* helper = data;
     vfs_memfs_node_t* node = session->data.node;
 
+    if ((session->data.flags & VFS_O_RDWR) == VFS_O_WRONLY)
+    {
+        return VFS_EBADF;
+    }
+
     vfs_mutex_enter(&session->mutex);
     vfs_rwlock_rdlock(&node->rwlock);
     do 
@@ -874,6 +879,11 @@ static int _vfs_memfs_write_inner(vfs_memfs_session_t* session, void* data)
     int ret = 0;
     vfs_memfs_write_helper_t* helper = data;
     vfs_memfs_node_t* node = session->data.node;
+
+    if ((session->data.flags & VFS_O_RDWR) == VFS_O_RDONLY)
+    {
+        return VFS_EBADF;
+    }
 
     vfs_mutex_enter(&session->mutex);
     vfs_rwlock_wrlock(&node->rwlock);

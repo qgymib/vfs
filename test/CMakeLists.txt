@@ -18,6 +18,8 @@ add_executable(vfs_test
     generic/check_root.c
     generic/mkdir_parent_not_exist.c
     generic/mkdir_rmdir_in_root.c
+    generic/open_as_rdonly_and_write.c
+    generic/open_as_wronly_and_read.c
     generic/open_parent_not_exist.c
     generic/open_unlink_in_root.c
     generic/rmdir_non_empty.c
