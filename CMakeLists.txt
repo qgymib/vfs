@@ -36,6 +36,7 @@ add_library(${PROJECT_NAME}
     src/fs/memfs.c
     src/fs/nullfs.c
     src/fs/overlayfs.c
+    src/fs/randfs.c
     src/utils/atomic.c
     src/utils/dir.c
     src/utils/errcode.c

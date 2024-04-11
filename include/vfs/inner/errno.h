@@ -95,6 +95,15 @@
 #   define VFS_EINVAL       (-22)
 #endif
 
+/**
+ * @brief Invalid seek.
+ */
+#if defined(ESPIPE)
+#   define VFS_ESPIPE       VFS__ERR(ESPIPE)
+#else
+#   define VFS_ESPIPE       (-29)
+#endif
+
 #if defined(ENOSYS)
 #   define VFS_ENOSYS       VFS__ERR(ENOSYS)
 #else

@@ -14,6 +14,7 @@ add_executable(vfs_test
     case/overlayfs_truncate.c
     case/overlayfs_unlink.c
     case/overlayfs_write.c
+    case/randfs.c
     generic/__init__.c
     generic/check_root.c
     generic/mkdir_parent_not_exist.c

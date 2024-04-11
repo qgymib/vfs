@@ -15,6 +15,7 @@
     xx(ENOTDIR)     \
     xx(EISDIR)      \
     xx(EINVAL)      \
+    xx(ESPIPE)      \
     xx(ENOSYS)      \
     xx(ENOTEMPTY)   \
     xx(EALREADY)
