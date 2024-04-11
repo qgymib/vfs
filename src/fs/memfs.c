@@ -1,72 +1,21 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
-#include "vfs/fs/memfs.h"
-#include "utils/atomic.h"
 #include "utils/defs.h"
 #include "utils/strlist.h"
 #include "utils/dir.h"
-#include "utils/rwlock.h"
-#include "utils/mutex.h"
-#include "utils/map.h"
-
-typedef struct vfs_memfs_node_dir
-{
-    struct vfs_memfs_node**     children;           /**< This node's children. */
-    size_t                      children_sz;        /**< The number of children. */
-    size_t                      children_cap;       /**< The capacity of children. */
-} vfs_memfs_node_dir_t;
-
-typedef struct vfs_memfs_node_reg
-{
-    uint8_t*                    data;               /**< File content. '\0' terminal is always appended. */
-} vfs_memfs_node_reg_t;
-
-typedef struct vfs_memfs_node
-{
-    vfs_atomic_t                refcnt;             /**< Reference count. */
-    vfs_rwlock_t                rwlock;             /**< RW lock for everything except refcnt. */
-    vfs_str_t                   name;               /**< The name of this node. */
-    vfs_stat_t                  stat;               /**< The stat of this node. */
-    struct vfs_memfs_node*      parent;             /**< This node's parent. */
-
-    union
-    {
-        vfs_memfs_node_dir_t    dir;                /**< Directory. */
-        vfs_memfs_node_reg_t    reg;                /**< Regular file. */
-    } data;
-} vfs_memfs_node_t;
-
-typedef struct vfs_memfs_session
-{
-    ev_map_node_t               node;
-    vfs_atomic_t                refcnt;             /**< Reference count. */
-    vfs_mutex_t                 mutex;              /**< Mutex for this session. */
-
-    struct
-    {
-        uintptr_t               fh;                 /**< File handle. */
-        uint64_t                flags;              /**< Open flags. */
-        uint64_t                fpos;               /**< File position. value of #UINT64_MAX means always append to end. */
-        vfs_memfs_node_t*       node;               /**< File system node with reference count increased. */
-    } data;
-} vfs_memfs_session_t;
+#include "memfs.h"
 
 typedef struct vfs_memfs
 {
     vfs_operations_t            op;                 /**< Base operations. */
+    vfs_memfs_io_t              io;                 /**< IO layer. */
 
     ev_map_t                    session_map;        /**< Session map. */
     vfs_mutex_t                 session_map_lock;   /**< Session map lock. */
 
     vfs_memfs_node_t*           root;               /**< File system tree. */
 } vfs_memfs_t;
-
-typedef struct vfs_memfs_delete_helper
-{
-    vfs_str_t* basename;
-    vfs_stat_flag_t type;
-} vfs_memfs_delete_helper_t;
 
 static int _vfs_memfs_common_cmp_session(const ev_map_node_t* key1,
     const ev_map_node_t* key2, void* arg)
@@ -79,6 +28,11 @@ static int _vfs_memfs_common_cmp_session(const ev_map_node_t* key1,
         return 0;
     }
     return session_1->data.fh < session_2->data.fh ? -1 : 1;
+}
+
+static void _vfs_memfs_common_acquire_node(vfs_memfs_node_t* node)
+{
+    (void)vfs_atomic_add(&node->refcnt);
 }
 
 static void _vfs_memfs_common_remove_node_from_parent(vfs_memfs_node_t* node)
@@ -168,6 +122,25 @@ static void _vfs_memfs_common_release_node(vfs_memfs_node_t* node, int unlink)
     free(node);
 }
 
+static vfs_memfs_node_t* _vfs_memfs_common_search_for_nolock(vfs_memfs_node_t* parent, const vfs_str_t* name)
+{
+    size_t i;
+    vfs_memfs_node_t* node = NULL;
+
+    for (i = 0; i < parent->data.dir.children_sz; i++)
+    {
+        vfs_memfs_node_t* child = parent->data.dir.children[i];
+        if (vfs_str_cmp2(&child->name, name) == 0)
+        {
+            node = child;
+            _vfs_memfs_common_acquire_node(node);
+            break;
+        }
+    }
+
+    return node;
+}
+
 /**
  * @brief Search for \p name in \p parent.
  * @param[in] parent - Parent node.
@@ -176,19 +149,11 @@ static void _vfs_memfs_common_release_node(vfs_memfs_node_t* node, int unlink)
  */
 static vfs_memfs_node_t* _vfs_memfs_common_search_for(vfs_memfs_node_t* parent, const vfs_str_t* name)
 {
-    size_t i;
     vfs_memfs_node_t* node = NULL;
 
     vfs_rwlock_rdlock(&parent->rwlock);
-    for (i = 0; i < parent->data.dir.children_sz; i++)
     {
-        vfs_memfs_node_t* child = parent->data.dir.children[i];
-        if (vfs_str_cmp2(&child->name, name) == 0)
-        {
-            node = child;
-            (void)vfs_atomic_add(&child->refcnt);
-            break;
-        }
+        node = _vfs_memfs_common_search_for_nolock(parent, name);
     }
     vfs_rwlock_rdunlock(&parent->rwlock);
 
@@ -208,7 +173,7 @@ static int _vfs_memfs_common_op_path(vfs_memfs_t* fs, const vfs_str_t* path,
 {
     int ret;
     vfs_memfs_node_t* parent = fs->root;
-    (void)vfs_atomic_add(&parent->refcnt);
+    _vfs_memfs_common_acquire_node(parent);
 
     vfs_strlist_t path_list = vfs_str_split(path, "/", 1);
     if (path_list.num == 0)
@@ -275,7 +240,7 @@ static vfs_memfs_node_t* _vfs_memfs_common_new_node(vfs_memfs_node_t* parent,
 
     if (parent != NULL)
     {
-        vfs_rwlock_wrlock(&parent->rwlock);
+       
         do {
             ret = _vfs_memfs_common_node_ensure_capacity(parent, parent->data.dir.children_sz + 1);
             if (ret != 0)
@@ -285,7 +250,6 @@ static vfs_memfs_node_t* _vfs_memfs_common_new_node(vfs_memfs_node_t* parent,
             parent->data.dir.children[parent->data.dir.children_sz] = new_node;
             parent->data.dir.children_sz++;
         } while (0);
-        vfs_rwlock_wrunlock(&parent->rwlock);
 
         if (ret != 0)
         {
@@ -475,7 +439,7 @@ static int _vfs_memfs_open_searcher(vfs_memfs_node_t* node, void* data)
     vfs_mmefs_open_searcher_t* searcher = data;
 
     searcher->node = node;
-    (void)vfs_atomic_add(&node->refcnt);
+    _vfs_memfs_common_acquire_node(node);
 
     return 0;
 }
@@ -493,7 +457,7 @@ static int _vfs_memfs_open_exist(vfs_memfs_t* fs, vfs_memfs_node_t* node, uintpt
     session->data.flags = flags;
     session->data.fpos = 0;
     session->data.node = node;
-    (void)vfs_atomic_add(&node->refcnt);
+    _vfs_memfs_common_acquire_node(node);
 
     /* Handle APPEND flag. */
     if (flags & VFS_O_APPEND)
@@ -537,20 +501,31 @@ static int _vfs_memfs_open_inner(vfs_memfs_t* fs, vfs_memfs_node_t* parent,
 {
     int ret = 0;
 
-    /* Get node. */
-    vfs_memfs_node_t* child = _vfs_memfs_common_search_for(parent, name);
-    if (child == NULL)
+    vfs_memfs_node_t* child = NULL;
+    vfs_rwlock_wrlock(&parent->rwlock);
+    do 
     {
-        if (!(flags & VFS_O_CREATE))
+        if ((child = _vfs_memfs_common_search_for_nolock(parent, name)) == NULL)
         {
-            return VFS_ENOENT;
-        }
+            if (!(flags & VFS_O_CREATE))
+            {
+                ret = VFS_ENOENT;
+                break;
+            }
 
-        if ((child = _vfs_memfs_common_new_node(parent, name, VFS_S_IFREG)) == NULL)
-        {
-            return VFS_ENOMEM;
+            if ((child = _vfs_memfs_common_new_node(parent, name, VFS_S_IFREG)) == NULL)
+            {
+                ret = VFS_ENOMEM;
+                break;
+            }
+            _vfs_memfs_common_acquire_node(child);
         }
-        (void)vfs_atomic_add(&child->refcnt);
+    } while (0);
+    vfs_rwlock_wrunlock(&parent->rwlock);
+
+    if (ret != 0)
+    {
+        return ret;
     }
 
     /* Check type. */
@@ -573,6 +548,11 @@ static int _vfs_memfs_open(struct vfs_operations* thiz, uintptr_t* fh, const cha
     int ret = 0;
     vfs_memfs_t* fs = EV_CONTAINER_OF(thiz, vfs_memfs_t, op);
     vfs_str_t path_str = vfs_str_from_static1(path);
+    if (vfs_str_cmp1(&path_str, "/") == 0)
+    {
+        return VFS_EISDIR;
+    }
+
     vfs_str_t basename = VFS_STR_INIT;
     vfs_str_t parent_path = vfs_path_parent(&path_str, &basename);
 
@@ -591,7 +571,7 @@ static int _vfs_memfs_open(struct vfs_operations* thiz, uintptr_t* fh, const cha
     else
     {
         parent = fs->root;
-        (void)vfs_atomic_add(&parent->refcnt);
+        _vfs_memfs_common_acquire_node(parent);
     }
 
     ret = _vfs_memfs_open_inner(fs, parent, fh, &basename, flags);
@@ -775,14 +755,34 @@ static int64_t _vfs_memfs_seek(struct vfs_operations* thiz, uintptr_t fh, int64_
 
 typedef struct vfs_memfs_read_helper
 {
-    void*   buf;
-    size_t  len;
+    vfs_memfs_t*    fs;
+    void*           buf;
+    size_t          len;
 } vfs_memfs_read_helper_t;
+
+static int _vfs_memfs_read_default(vfs_memfs_session_t* session, void* buf, size_t len, void* data)
+{
+    (void)data;
+
+    vfs_memfs_node_t* node = session->data.node;
+    if (session->data.fpos >= node->stat.st_size)
+    {
+        return VFS_EOF;
+    }
+
+    size_t left_sz = node->stat.st_size - session->data.fpos;
+    int ret = (int)min(left_sz, len);
+    memcpy(buf, node->data.reg.data + session->data.fpos, ret);
+    session->data.fpos += ret;
+
+    return ret;
+}
 
 static int _vfs_memfs_read_inner(vfs_memfs_session_t* session, void* data)
 {
     int ret = 0;
     vfs_memfs_read_helper_t* helper = data;
+    vfs_memfs_t* fs = helper->fs;
     vfs_memfs_node_t* node = session->data.node;
 
     if ((session->data.flags & VFS_O_RDWR) == VFS_O_WRONLY)
@@ -794,27 +794,18 @@ static int _vfs_memfs_read_inner(vfs_memfs_session_t* session, void* data)
     vfs_rwlock_rdlock(&node->rwlock);
     do 
     {
-        if (session->data.fpos >= node->stat.st_size)
-        {
-            ret = VFS_EOF;
-            break;
-        }
-
-        size_t left_sz = node->stat.st_size - session->data.fpos;
-        ret = (int)min(left_sz, helper->len);
-        memcpy(helper->buf, node->data.reg.data + session->data.fpos, ret);
-        session->data.fpos += ret;
+        ret = fs->io.read(session, helper->buf, helper->len, fs->io.data);
     } while (0);
     vfs_rwlock_rdunlock(&node->rwlock);
     vfs_mutex_leave(&session->mutex);
-    
+
     return ret;
 }
 
 static int _vfs_memfs_read(struct vfs_operations* thiz, uintptr_t fh, void* buf, size_t len)
 {
     vfs_memfs_t* fs = EV_CONTAINER_OF(thiz, vfs_memfs_t, op);
-    vfs_memfs_read_helper_t helper = { buf, len };
+    vfs_memfs_read_helper_t helper = { fs, buf, len };
     return _vfs_memfs_common_op_fh(fs, fh, _vfs_memfs_read_inner, &helper);
 }
 
@@ -824,8 +815,9 @@ static int _vfs_memfs_read(struct vfs_operations* thiz, uintptr_t fh, void* buf,
 
 typedef struct vfs_memfs_write_helper
 {
-    const void* buf;
-    size_t      len;
+    vfs_memfs_t*    fs;
+    const void*     buf;
+    size_t          len;
 } vfs_memfs_write_helper_t;
 
 static int _vfs_memfs_write_append(vfs_memfs_node_t* node, const void* buf, size_t len)
@@ -869,15 +861,29 @@ static int _vfs_memfs_write_pos(vfs_memfs_session_t* session, vfs_memfs_node_t* 
     memcpy(new_buf + session->data.fpos, buf, len);
     node->stat.st_size = new_sz;
     node->data.reg.data[node->stat.st_size] = '\0';
-    
+
     session->data.fpos += len;
     return (int)len;
+}
+
+static int _vfs_memfs_write_default(vfs_memfs_session_t* session,
+    const void* buf, size_t len, void* data)
+{
+    (void)data;
+
+    vfs_memfs_node_t* node = session->data.node;
+    if (session->data.fpos == UINT64_MAX)
+    {
+        return _vfs_memfs_write_append(node, buf, len);
+    }
+    return _vfs_memfs_write_pos(session, node, buf, len);
 }
 
 static int _vfs_memfs_write_inner(vfs_memfs_session_t* session, void* data)
 {
     int ret = 0;
     vfs_memfs_write_helper_t* helper = data;
+    vfs_memfs_t* fs = helper->fs;
     vfs_memfs_node_t* node = session->data.node;
 
     if ((session->data.flags & VFS_O_RDWR) == VFS_O_RDONLY)
@@ -889,12 +895,7 @@ static int _vfs_memfs_write_inner(vfs_memfs_session_t* session, void* data)
     vfs_rwlock_wrlock(&node->rwlock);
     do
     {
-        if (session->data.fpos == UINT64_MAX)
-        {
-            ret = _vfs_memfs_write_append(node, helper->buf, helper->len);
-            break;
-        }
-        ret = _vfs_memfs_write_pos(session, node, helper->buf, helper->len);
+        ret = fs->io.write(session, helper->buf, helper->len, fs->io.data);
     } while (0);
     vfs_rwlock_wrunlock(&node->rwlock);
     vfs_mutex_leave(&session->mutex);
@@ -905,7 +906,7 @@ static int _vfs_memfs_write_inner(vfs_memfs_session_t* session, void* data)
 static int _vfs_memfs_write(struct vfs_operations* thiz, uintptr_t fh, const void* buf, size_t len)
 {
     vfs_memfs_t* fs = EV_CONTAINER_OF(thiz, vfs_memfs_t, op);
-    vfs_memfs_write_helper_t helper = { buf, len };
+    vfs_memfs_write_helper_t helper = { fs, buf, len };
     return _vfs_memfs_common_op_fh(fs, fh, _vfs_memfs_write_inner, &helper);
 }
 
@@ -915,21 +916,29 @@ static int _vfs_memfs_write(struct vfs_operations* thiz, uintptr_t fh, const voi
 
 static int _vfs_memfs_mkdir_inner(vfs_memfs_node_t* node, void* data)
 {
+    int ret = 0;
     vfs_str_t* basename = data;
 
-    vfs_memfs_node_t* child = _vfs_memfs_common_search_for(node, basename);
-    if (child != NULL)
+    vfs_rwlock_wrlock(&node->rwlock);
+    do 
     {
-        _vfs_memfs_common_release_node(child, 0);
-        return VFS_EALREADY;
-    }
+        vfs_memfs_node_t* child = _vfs_memfs_common_search_for_nolock(node, basename);
+        if (child != NULL)
+        {
+            _vfs_memfs_common_release_node(child, 0);
+            ret = VFS_EALREADY;
+            break;
+        }
 
-    if ((child = _vfs_memfs_common_new_node(node, basename, VFS_S_IFDIR)) == NULL)
-    {
-        return VFS_ENOMEM;
-    }
+        if ((child = _vfs_memfs_common_new_node(node, basename, VFS_S_IFDIR)) == NULL)
+        {
+            ret = VFS_ENOMEM;
+            break;
+        }
+    } while (0);
+    vfs_rwlock_wrunlock(&node->rwlock);
 
-    return 0;
+    return ret;
 }
 
 static int _vfs_memfs_mkdir(struct vfs_operations* thiz, const char* path)
@@ -1082,6 +1091,19 @@ int vfs_make_memory(vfs_operations_t** fs)
         return VFS_ENOMEM;
     }
 
+    const vfs_memfs_io_t io = {
+        NULL,
+        _vfs_memfs_read_default,
+        _vfs_memfs_write_default,
+    };
+    vfs_memfs_set_io(&memfs->op, &io);
+
     *fs = &memfs->op;
     return 0;
+}
+
+void vfs_memfs_set_io(vfs_operations_t* fs, const vfs_memfs_io_t* io)
+{
+    vfs_memfs_t* memfs = EV_CONTAINER_OF(fs, vfs_memfs_t, op);
+    memfs->io = *io;
 }

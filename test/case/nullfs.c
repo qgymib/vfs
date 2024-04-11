@@ -92,7 +92,7 @@ TEST_F(nullfs, seek)
         const char* path = LOCALFS_TEST_MOUNT_PATH "/foo";
         ASSERT_EQ_INT(vfs->open(vfs, &fh, path, VFS_O_RDWR | VFS_O_CREATE), 0);
         ASSERT_EQ_INT(vfs->write(vfs, fh, "dummy", 5), 5);
-        ASSERT_EQ_INT64(vfs->seek(vfs, fh, -1, VFS_SEEK_END), 0);
+        ASSERT_EQ_INT64(vfs->seek(vfs, fh, -1, VFS_SEEK_END), 4);
         ASSERT_EQ_INT(vfs->close(vfs, fh), 0);
     }
 }
@@ -107,7 +107,7 @@ TEST_F(nullfs, truncate)
         const char* path = LOCALFS_TEST_MOUNT_PATH "/foo";
         ASSERT_EQ_INT(vfs->open(vfs, &fh, path, VFS_O_RDWR | VFS_O_CREATE), 0);
         ASSERT_EQ_INT(vfs->write(vfs, fh, "dummy", 5), 5);
-        ASSERT_EQ_INT64(vfs->seek(vfs, fh, -1, VFS_SEEK_END), 0);
+        ASSERT_EQ_INT64(vfs->seek(vfs, fh, -1, VFS_SEEK_END), 4);
         ASSERT_EQ_INT(vfs->truncate(vfs, fh, 1), 0);
         ASSERT_EQ_INT(vfs->close(vfs, fh), 0);
     }
