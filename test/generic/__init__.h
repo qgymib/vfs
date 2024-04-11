@@ -19,19 +19,6 @@ typedef struct vfs_test_generic_case
     void (*entry)(vfs_operations_t* fs);
 } vfs_test_generic_case_t;
 
-extern const vfs_test_generic_case_t vfs_test_generic_check_root;
-extern const vfs_test_generic_case_t vfs_test_generic_mkdir_parent_not_exist;
-extern const vfs_test_generic_case_t vfs_test_generic_mkdir_rmdir_in_root;
-extern const vfs_test_generic_case_t vfs_test_generic_open_as_rdonly_and_write;
-extern const vfs_test_generic_case_t vfs_test_generic_open_as_wronly_and_read;
-extern const vfs_test_generic_case_t vfs_test_generic_open_parent_not_exist;
-extern const vfs_test_generic_case_t vfs_test_generic_open_unlink_in_root;
-extern const vfs_test_generic_case_t vfs_test_generic_rmdir_non_empty;
-extern const vfs_test_generic_case_t vfs_test_generic_rmdir_type_mismatch;
-extern const vfs_test_generic_case_t vfs_test_generic_truncate_larget_and_seek;
-extern const vfs_test_generic_case_t vfs_test_generic_truncate_smaller_and_seek;
-extern const vfs_test_generic_case_t vfs_test_generic_unlink_type_mismatch;
-
 /**
  * @brief Generic file system tester.
  * @param[in] fs - The file system.
